@@ -1,2 +1,2 @@
 # kubetimer
-A Kubernetes way to manage lifecycle of resources using the time.
+A way to manage lifecycle of Kubernetes resources using time.

@@ -1,0 +1,8 @@
+---
+# Namespace for KubeTimer operator
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubetimer-system
+  labels:
+    app: kubetimer

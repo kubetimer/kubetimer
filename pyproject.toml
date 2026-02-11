@@ -1,0 +1,27 @@
+[project]
+name = "kubetimer"
+version = "0.1.0"
+description = "A way to manage lifecycle of Kubernetes resources using time."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "kopf>=1.40.0",
+    "kubernetes>=34.1.0",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "structlog>=25.5.0",
+    "uvloop>=0.22.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["kubetimer"]
+
+[tool.hatch.envs.default]
+installer = "uv"
+
+[dependency-groups]
+dev = []

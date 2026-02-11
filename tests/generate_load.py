@@ -1,8 +1,8 @@
 import time
 from kubernetes import client, config
 
-DEPLOYMENTS_COUNT = 2000
-BATCH_SIZE = 300 # Create in batches to be nice to Minikube
+DEPLOYMENTS_COUNT = 10
+BATCH_SIZE = 2 # Create in batches to be nice to Minikube
 
 def create_zombies():
     config.load_kube_config()

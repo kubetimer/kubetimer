@@ -25,3 +25,7 @@ spec:
           limits:
             memory: "500Mi"
             cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080

@@ -1,0 +1,50 @@
+---
+# KubeTimer Operator Deployment
+# This runs the operator inside your Kubernetes cluster
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubetimer-operator
+  namespace: kubetimer-system
+  labels:
+    app: kubetimer-operator
+spec:
+  replicas: 1  # Only 1 replica needed because of Kopf (https://kopf.readthedocs.io/en/stable/deployment/#cluster-deployment)
+  selector:
+    matchLabels:
+      app: kubetimer-operator
+  template:
+    metadata:
+      labels:
+        app: kubetimer-operator
+    spec:
+      serviceAccountName: kubetimer-operator
+      containers:
+        - name: operator
+          image: ryanjorgeac/kubetimer:v0.0.3-log
+          imagePullPolicy: Always
+          env:
+            - name: KUBETIMER_CHECK_INTERVAL
+              value: "60"
+            - name: KUBETIMER_LOG_LEVEL
+              value: "INFO"
+            - name: KUBETIMER_KOPF_LOG_LEVEL
+              value: "WARNING"
+            - name: KUBETIMER_LOG_FORMAT
+              value: "text"
+          
+          resources:
+            requests:
+              memory: "80Mi"
+              cpu: "50m"
+            limits:
+              memory: "200Mi"
+              cpu: "500m"
+
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30

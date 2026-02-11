@@ -1,7 +1,0 @@
-FROM python:3.9-slim
-
-RUN pip install kubernetes-asyncio kopf
-
-COPY operator_async.py /app/main.py
-
-CMD ["kopf", "run", "/app/main.py", "--standalone"]
