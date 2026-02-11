@@ -8,10 +8,11 @@ for resources with expired TTL.
 from datetime import datetime
 import kopf
 
-from kubetimer.config.k8s import apps_v1_client
+from kubetimer.config.k8s import KubeTimerConfig, apps_v1_client
 from kubetimer.handlers.deployment import (
     deployment_handler,
 )
+from kubetimer.handlers.registry import configure_memo
 from kubetimer.utils.logs import get_logger
 
 klogger = get_logger(__name__)
@@ -74,7 +75,29 @@ def check_ttl_timer_handler(
     logger.info(f"ttl_check_completed: {name} in {completiontime:.2f}s")
 
 
-def config_changed_handler(spec, name, **_):
+def config_changed_handler(spec, name, memo: kopf.Memo, **_):
+    if name != memo.get('config_name'):
+        klogger.warning("ignoring_non_default_config_change", config=name)
+        return
+
+    kubetimerconfig = KubeTimerConfig(
+        name=name,
+        enabled_resources=spec.get('enabledResources', ['deployments']),
+        annotation_key=spec.get('annotationKey', 'kubetimer.io/ttl'),
+        dry_run=spec.get('dryRun', False),
+        timezone=spec.get('timezone', 'UTC'),
+        namespaces=spec.get('namespaces', {}),
+    )
+    
+    configure_memo(memo, kubetimerconfig)
+
+    memo.enabled_resources = set(kubetimerconfig.enabled_resources)
+    memo.annotation_key = kubetimerconfig.annotation_key
+    memo.dry_run = kubetimerconfig.dry_run
+    memo.timezone = kubetimerconfig.timezone
+    memo.namespaces = kubetimerconfig.namespaces
+    memo.config_loaded = True
+
     klogger.info(
         "config_updated",
         config=name,

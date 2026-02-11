@@ -126,7 +126,7 @@ def deployment_handler(
                 error=str(e)
             )
         except client.ApiException as e:
-            if e.status != 404:
+            if e.status == 404:
                 logger.error(
                     "deployment_was_already_deleted",
                     name=name,
