@@ -6,7 +6,6 @@ apiVersion: kubetimer.io/v1
 kind: KubeTimerConfig
 metadata:
   name: kubetimerconfig
-  namespace: kubetimer-system
 spec:
   # Which resources to watch for TTL annotations
   enabledResources:

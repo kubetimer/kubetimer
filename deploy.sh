@@ -12,7 +12,7 @@ kubectl apply -f deploy/namespace.yaml
 
 # 2. Install CRD
 echo "Installing CRD..."
-kubectl apply -f kubetimer/crd/kubetimerconfig.yaml
+kubectl apply -f deploy/crd.yaml
 
 # 3. Setup RBAC
 echo "Setting up RBAC..."

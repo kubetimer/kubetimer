@@ -33,8 +33,6 @@ spec:
               value: "WARNING"
             - name: KUBETIMER_LOG_FORMAT
               value: "text"
-            - name: KUBETIMER_ANNOTATION_KEY
-              value: "kubetimer.io/ttl"
           
           resources:
             requests:

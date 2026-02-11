@@ -22,7 +22,7 @@ WORKDIR /app
 COPY --from=builder /build/.venv /app/.venv
 COPY kubetimer/ ./kubetimer/
 
-ENV PATH="/app/.venv/bin:$PATH" \ 
+ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH="/app"
 

@@ -20,5 +20,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["kubetimer"]
 
+[tool.hatch.envs.default]
+installer = "uv"
+
 [dependency-groups]
 dev = []
