@@ -14,6 +14,9 @@ from kubetimer.config.k8s import load_k8s_config
 from kubetimer.config.settings import get_settings
 from kubetimer.handlers import (
     deployment_indexer,
+    on_deployment_created_with_ttl,
+    on_ttl_annotation_changed,
+    on_deployment_deleted_with_ttl,
     check_ttl_timer_handler,
     init_memo,
     configure_memo,
@@ -59,8 +62,8 @@ def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_):
             timezone=kubetimer_settings.timezone
         )
         
-        # Start APScheduler for event-driven deletion scheduling
         if not scheduler.running:
+            logger.info("starting_apscheduler")
             scheduler.start()
             memo.scheduler = scheduler
             logger.info(
@@ -95,8 +98,7 @@ def shutdown_handler(memo: kopf.Memo, **_):
     - This is acceptable because jobs will be rescheduled on restart
     """
     logger.info("kubetimer_operator_shutting_down")
-    
-    # Check if scheduler exists in memo and is running
+
     if hasattr(memo, 'scheduler') and memo.scheduler.running:
         try:
             logger.info("shutting_down_apscheduler")
@@ -123,11 +125,13 @@ def register_all_handlers():
     Handler lifecycle:
     1. startup_handler - Initialize config and start APScheduler
     2. index handlers - Build resource indexes from K8s watches
-    3. event handlers - (Next step) Schedule/reschedule deletion jobs
+    3. event handlers - Schedule/reschedule/cancel deletion jobs
     4. shutdown_handler - Gracefully stop APScheduler on termination
     
-    Note: Timer handler is TEMPORARY and will be removed when
-    event handlers are implemented.
+    Event-driven architecture:
+    - No more timer-based polling!
+    - Deployment events trigger immediate job scheduling
+    - Zero CPU usage when idle (no resources to watch)
     """
     logger.info("registering_kopf_handlers")
     
@@ -141,13 +145,28 @@ def register_all_handlers():
 
     # Health probe for K8s liveness checks
     kopf.on.probe(id="health")(lambda **_: True)
-
-    # TEMPORARY: Timer-based scanning (will be replaced by APScheduler)
-    # Using a dummy timer on cluster-scoped operator itself
+    
+    kopf.on.create(
+        'apps', 'v1', 'deployments',
+        annotations={kubetimer_settings.annotation_key: kopf.PRESENT}
+    )(on_deployment_created_with_ttl)
+    
+    kopf.on.field(
+        'apps', 'v1', 'deployments',
+        field=f'metadata.annotations.{kubetimer_settings.annotation_key.replace(".", "\\.")}',
+    )(on_ttl_annotation_changed)
+    
+    kopf.on.delete(
+        'apps', 'v1', 'deployments',
+        annotations={kubetimer_settings.annotation_key: kopf.PRESENT}
+    )(on_deployment_deleted_with_ttl)
+    
+    # TEMPORARY: Keep timer for backward compatibility during transition
+    # Will be removed in final implementation (Step 7)
     @kopf.timer('', 'v1', 'namespaces', interval=60.0, idle=10.0)
     def temp_timer_handler(memo: kopf.Memo, deployment_indexer: kopf.Index, logger: kopf.Logger, **_):
         check_ttl_timer_handler(
-            name='kubetimerconfig',  # Dummy name for compatibility
+            name='kubetimerconfig',
             memo=memo,
             deployment_indexer=deployment_indexer,
             logger=logger
