@@ -3,7 +3,7 @@ Handlers for KubeTimer operator.
 
 Exports:
 - Index handler functions for each resource type
-- Timer handlers for TTL scanning
+- Timer handlers for TTL scanning (DEPRECATED - will be replaced by APScheduler)
 - Registry functions for handler registration
 """
 
@@ -14,7 +14,6 @@ from kubetimer.handlers.deployment import (
 
 from kubetimer.handlers.timer import (
     check_ttl_timer_handler,
-    config_changed_handler,
 )
 
 from kubetimer.handlers.registry import (
@@ -29,7 +28,6 @@ __all__ = [
     "deployment_indexer",
     "deployment_handler",
     "check_ttl_timer_handler",
-    "config_changed_handler",
     "init_memo",
     "configure_memo",
     "register_all_indexes",

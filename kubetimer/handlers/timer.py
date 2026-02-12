@@ -3,16 +3,19 @@ Timer handlers for KubeTimer operator.
 
 These handlers are triggered periodically by Kopf timers to scan
 for resources with expired TTL.
+
+NOTE: This file will be removed in the event-driven refactoring.
+The timer-based polling approach will be replaced with APScheduler
+that schedules deletion jobs based on TTL expiry times.
 """
 
 from datetime import datetime
 import kopf
 
-from kubetimer.config.k8s import KubeTimerConfig, apps_v1_client
+from kubetimer.config.k8s import apps_v1_client
 from kubetimer.handlers.deployment import (
     deployment_handler,
 )
-from kubetimer.handlers.registry import configure_memo
 from kubetimer.utils.logs import get_logger
 
 klogger = get_logger(__name__)
@@ -24,7 +27,21 @@ def check_ttl_timer_handler(
     deployment_indexer: kopf.Index,
     logger: kopf.Logger,
     **_
-):  
+):
+    """
+    DEPRECATED: Timer-based TTL checking (will be replaced by APScheduler).
+    
+    This handler runs periodically to scan all indexed deployments
+    and delete those with expired TTLs.
+    
+    Why this approach has issues:
+    - Wastes CPU scanning resources that aren't expired yet
+    - Fixed interval means delayed deletions (up to check_interval seconds)
+    - Doesn't scale to zero when idle
+    
+    The event-driven approach will solve this by scheduling individual
+    deletion jobs at exact TTL expiry times.
+    """
     if name != 'kubetimerconfig':
         klogger.warning("ignoring_non_default_config", config=name)
         return  
@@ -35,12 +52,9 @@ def check_ttl_timer_handler(
     dry_run = memo.dry_run
     timezone_str = memo.timezone
     
-    namespaces_config = memo.namespaces
-    include_namespaces = namespaces_config.get('include', [])
-    exclude_namespaces = namespaces_config.get(
-        'exclude', 
-        ['kube-system', 'kube-public', 'kube-node-lease']
-    )
+    # Updated: Use new memo structure with separate lists
+    include_namespaces = memo.namespace_include
+    exclude_namespaces = memo.namespace_exclude
     
     klogger.info(
         "starting_scan",
@@ -73,35 +87,3 @@ def check_ttl_timer_handler(
         execution_time=completiontime
     )
     logger.info(f"ttl_check_completed: {name} in {completiontime:.2f}s")
-
-
-def config_changed_handler(spec, name, memo: kopf.Memo, **_):
-    if name != memo.get('config_name'):
-        klogger.warning("ignoring_non_default_config_change", config=name)
-        return
-
-    kubetimerconfig = KubeTimerConfig(
-        name=name,
-        enabled_resources=spec.get('enabledResources', ['deployments']),
-        annotation_key=spec.get('annotationKey', 'kubetimer.io/ttl'),
-        dry_run=spec.get('dryRun', False),
-        timezone=spec.get('timezone', 'UTC'),
-        namespaces=spec.get('namespaces', {}),
-    )
-    
-    configure_memo(memo, kubetimerconfig)
-
-    memo.enabled_resources = set(kubetimerconfig.enabled_resources)
-    memo.annotation_key = kubetimerconfig.annotation_key
-    memo.dry_run = kubetimerconfig.dry_run
-    memo.timezone = kubetimerconfig.timezone
-    memo.namespaces = kubetimerconfig.namespaces
-    memo.config_loaded = True
-
-    klogger.info(
-        "config_updated",
-        config=name,
-        enabled_resources=spec.get('enabledResources', ['deployments']),
-        annotation_key=spec.get('annotationKey', 'kubetimer.io/ttl'),
-        check_interval=spec.get('checkIntervalSeconds', 60)
-    )

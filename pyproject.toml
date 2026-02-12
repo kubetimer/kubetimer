@@ -5,6 +5,7 @@ description = "A way to manage lifecycle of Kubernetes resources using time."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "apscheduler>=3.11.2",
     "kopf>=1.40.0",
     "kubernetes>=34.1.0",
     "pydantic>=2.12.5",

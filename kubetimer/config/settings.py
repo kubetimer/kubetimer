@@ -3,26 +3,37 @@ Settings module for KubeTimer operator.
 
 This module uses Pydantic Settings to manage configuration from environment variables.
 All settings can be overridden via KUBETIMER_* environment variables.
+
+Example:
+    KUBETIMER_LOG_LEVEL=DEBUG
+    KUBETIMER_ENABLED_RESOURCES=deployments,pods
+    KUBETIMER_NAMESPACE_EXCLUDE=kube-system,kube-public
 """
 
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """
-    KubeTimer operator settings.
+    KubeTimer operator settings - Single source of truth for all configuration.
     
     All settings can be configured via environment variables with KUBETIMER_ prefix.
-    Example: KUBETIMER_LOG_LEVEL=DEBUG
     
     Attributes:
-        log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
+        log_level: Logging level for the operator
         log_format: Output format (json for production, text for development)
-        check_interval: Default check interval in seconds
+        kopf_log_level: Logging level for Kopf framework
+        annotation_key: Annotation key to look for TTL values on resources
+        enabled_resources: Comma-separated list of resource types to watch
+        namespace_include: Comma-separated list of namespaces to include (empty = all)
+        namespace_exclude: Comma-separated list of namespaces to exclude
+        timezone: IANA timezone string for TTL comparison (e.g., America/New_York)
+        dry_run: If true, log deletions without actually deleting
+        max_concurrent_deletions: Maximum parallel deletion operations
     """
     
     model_config = SettingsConfigDict(
@@ -32,6 +43,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
     
+    # Logging configuration
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO",
         description="Logging level for the operator"
@@ -41,18 +53,90 @@ class Settings(BaseSettings):
         default="text",
         description="Log output format (json for production, text for development)"
     )
-    
-    check_interval: int = Field(
-        default=60,
-        ge=5,
-        le=3600,
-        description="Default check interval in seconds"
-    )
 
     kopf_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="WARNING",
         description="Logging level for Kopf library"
     )
+
+    annotation_key: str = Field(
+        default="kubetimer.io/ttl",
+        description="Annotation key to look for TTL values"
+    )
+
+    enabled_resources: str = Field(
+        default="deployments",
+        description="Comma-separated list of resource types to watch (e.g., 'deployments,pods')"
+    )
+
+    namespace_include: str = Field(
+        default="",
+        description="Comma-separated list of namespaces to include (empty = all namespaces)"
+    )
+    
+    namespace_exclude: str = Field(
+        default="kube-system,kube-public,kube-node-lease",
+        description="Comma-separated list of namespaces to exclude"
+    )
+
+    # TTL and deletion behavior
+    timezone: str = Field(
+        default="UTC",
+        description="IANA timezone string for TTL comparison (e.g., 'America/New_York', 'Europe/London')"
+    )
+    
+    dry_run: bool = Field(
+        default=False,
+        description="If true, log deletions without actually deleting resources"
+    )
+
+    max_concurrent_deletions: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum number of parallel deletion operations to prevent API throttling"
+    )
+
+    @field_validator('enabled_resources')
+    @classmethod
+    def validate_enabled_resources(cls, v: str) -> str:
+        """
+        Validate enabled_resources contains only supported resource types.
+        """
+        supported = {'deployments', 'pods', 'replicasets'}
+        resources = {r.strip() for r in v.split(',') if r.strip()}
+        
+        invalid = resources - supported
+        if invalid:
+            raise ValueError(
+                f"Unsupported resource types: {invalid}. "
+                f"Supported types: {supported}"
+            )
+        
+        if not resources:
+            raise ValueError("At least one resource type must be enabled")
+        
+        return v
+    
+    def get_enabled_resources_list(self) -> list[str]:
+        """
+        Parse comma-separated enabled_resources into a list.
+        """
+        return [r.strip() for r in self.enabled_resources.split(',') if r.strip()]
+    
+    def get_namespace_include_list(self) -> list[str]:
+        """
+        Parse comma-separated namespace_include into a list.
+        """
+        if not self.namespace_include.strip():
+            return []
+        return [ns.strip() for ns in self.namespace_include.split(',') if ns.strip()]
+    
+    def get_namespace_exclude_list(self) -> list[str]:
+        """
+        Parse comma-separated namespace_exclude into a list.
+        """
+        return [ns.strip() for ns in self.namespace_exclude.split(',') if ns.strip()]
 
 
 @lru_cache
