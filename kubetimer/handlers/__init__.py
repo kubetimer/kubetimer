@@ -16,10 +16,6 @@ from kubetimer.handlers.deployment import (
     on_deployment_deleted_with_ttl,
 )
 
-from kubetimer.handlers.timer import (
-    check_ttl_timer_handler,
-)
-
 from kubetimer.handlers.registry import (
     init_memo,
     configure_memo,
@@ -34,7 +30,6 @@ __all__ = [
     "on_deployment_created_with_ttl",
     "on_ttl_annotation_changed",
     "on_deployment_deleted_with_ttl",
-    "check_ttl_timer_handler",
     "init_memo",
     "configure_memo",
     "register_all_indexes",

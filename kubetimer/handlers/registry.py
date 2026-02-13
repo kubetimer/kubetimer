@@ -90,8 +90,6 @@ def register_all_indexes(
         registered.append('deployments')
         logger.debug("registered_deployment_index")
 
-    # TODO: Add other resource indexes when implemented
-    
     logger.info("all_indexes_registered", registered=registered)
     return registered
 
