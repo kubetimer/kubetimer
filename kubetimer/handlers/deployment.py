@@ -9,7 +9,7 @@ This module includes both:
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import kopf
@@ -505,164 +505,6 @@ def cancel_deletion_job(
         )
         return False
 
-
-def deployment_event_handler(
-    event: Dict[str, Any],
-    namespace: str,
-    name: str,
-    uid: str,
-    meta: kopf.Meta,
-    memo: kopf.Memo,
-    **_
-) -> None:
-    """
-    Handle Deployment events to schedule/reschedule/cancel deletion jobs.
-    
-    This is the core of the event-driven architecture. Called by Kopf whenever:
-    - A Deployment is created/updated/deleted
-    - Annotations change on an existing Deployment
-    
-    Event-driven vs Timer-based:
-    - OLD: Poll every 60s, check all Deployments, delete expired ones
-    - NEW: React to changes immediately, schedule individual deletion jobs
-    
-    Why this is better:
-    - Zero CPU when idle (no polling loop)
-    - Immediate response (schedule within milliseconds)
-    - Precise deletions (at exact TTL expiry time)
-    - Scalable (thousands of Deployments = thousands of lightweight jobs)
-    
-    Args:
-        event: Kopf event dict with 'type' (ADDED/MODIFIED/DELETED) and 'object'
-        namespace: Deployment namespace
-        name: Deployment name
-        uid: Deployment UID (unique per instance)
-        meta: Deployment metadata
-        memo: Kopf memo with scheduler and config
-    """
-    event_type = event.get('type')
-    
-    # Get scheduler from memo
-    if not hasattr(memo, 'scheduler'):
-        logger.error(
-            "scheduler_not_in_memo",
-            namespace=namespace,
-            name=name,
-            message="APScheduler not initialized, cannot handle event"
-        )
-        return
-    
-    scheduler = memo.scheduler
-    annotation_key = memo.annotation_key
-    timezone_str = memo.timezone
-    dry_run = memo.dry_run
-    max_concurrent_deletions = memo.max_concurrent_deletions
-
-    include_namespaces = memo.namespace_include
-    exclude_namespaces = memo.namespace_exclude
-    
-    if not should_scan_namespace(namespace, include_namespaces, exclude_namespaces):
-        logger.debug(
-            "namespace_filtered",
-            namespace=namespace,
-            name=name,
-            event_type=event_type,
-            message="Namespace excluded by config"
-        )
-        cancel_deletion_job(scheduler, namespace, name, uid)
-        return
-
-    if event_type == 'DELETED':
-        logger.debug(
-            "deployment_deleted_event",
-            namespace=namespace,
-            name=name,
-            uid=uid
-        )
-        cancel_deletion_job(scheduler, namespace, name, uid)
-        return
-
-    annotations = meta.get('annotations', {})
-    ttl_value = annotations.get(annotation_key)
-
-    if not ttl_value:
-        logger.debug(
-            "no_ttl_annotation",
-            namespace=namespace,
-            name=name,
-            event_type=event_type
-        )
-        cancel_deletion_job(scheduler, namespace, name, uid)
-        return
-    
-    try:
-        ttl_datetime = parse_ttl(ttl_value)
-    except ValueError as e:
-        logger.error(
-            "invalid_ttl_in_event",
-            namespace=namespace,
-            name=name,
-            ttl=ttl_value,
-            error=str(e),
-            event_type=event_type
-        )
-        cancel_deletion_job(scheduler, namespace, name, uid)
-        return
-
-    if is_ttl_expired(ttl_datetime, timezone_str):
-        logger.info(
-            "ttl_already_expired_in_event",
-            namespace=namespace,
-            name=name,
-            ttl=ttl_value,
-            event_type=event_type,
-            message="Will be deleted immediately, not scheduling job"
-        )
-        # Don't schedule - will be handled by startup cleanup (Step 7)
-        # Or we could delete immediately here, but startup cleanup is safer
-        return
-    
-    # Schedule or reschedule the deletion job
-    if event_type == 'ADDED':
-        logger.debug(
-            "scheduling_new_deployment",
-            namespace=namespace,
-            name=name,
-            ttl=ttl_value
-        )
-        schedule_deletion_job(
-            scheduler=scheduler,
-            namespace=namespace,
-            name=name,
-            uid=uid,
-            ttl_datetime=ttl_datetime,
-            annotation_key=annotation_key,
-            timezone_str=timezone_str,
-            dry_run=dry_run,
-            max_concurrent_deletions=max_concurrent_deletions
-        )
-    
-    elif event_type == 'MODIFIED':
-        logger.debug(
-            "rescheduling_modified_deployment",
-            namespace=namespace,
-            name=name,
-            ttl=ttl_value
-        )
-        # reschedule_deletion_job uses replace_existing=True internally
-        reschedule_deletion_job(
-            scheduler=scheduler,
-            namespace=namespace,
-            name=name,
-            uid=uid,
-            new_ttl_datetime=ttl_datetime,
-            annotation_key=annotation_key,
-            timezone_str=timezone_str,
-            dry_run=dry_run,
-            max_concurrent_deletions=max_concurrent_deletions
-        )
-
-
 # ============================================================================
 # Refactored Event Handlers (Kopf-Optimized with Filtering)
 # ============================================================================
@@ -673,24 +515,16 @@ def on_deployment_created_with_ttl(
     uid: str,
     annotations: Dict[str, str],
     memo: kopf.Memo,
-    **_
+    **kwargs
 ) -> None:
-    """
-    Handle new Deployments created with a TTL annotation.
-    
-    This handler is called ONLY when:
-    1. A new Deployment is created (kopf.on.create)
-    2. It has the TTL annotation (Kopf filter)
-    
-    Why separate creation handler?
-    - Kopf filter ensures we only see relevant Deployments
-    - No manual annotation checking needed
-    - More efficient than generic event handler
-    """
+
     logger.debug(
         "handling_deployment_creation",
-        _,
+        namespace=namespace,
+        name=name,
+        uid=uid
     )
+
     if not hasattr(memo, 'scheduler'):
         logger.error("scheduler_not_in_memo", namespace=namespace, name=name, handler="on_create")
         return
@@ -701,7 +535,6 @@ def on_deployment_created_with_ttl(
     dry_run = memo.dry_run
     max_concurrent_deletions = memo.max_concurrent_deletions
     
-    # Namespace filtering
     if not should_scan_namespace(namespace, memo.namespace_include, memo.namespace_exclude):
         logger.debug("namespace_filtered_on_create", namespace=namespace, name=name)
         return
@@ -717,7 +550,9 @@ def on_deployment_created_with_ttl(
         return
     
     if is_ttl_expired(ttl_datetime, timezone_str):
-        logger.info("ttl_already_expired_on_create", namespace=namespace, name=name, ttl=ttl_value)
+        logger.info("ttl_already_expired_on_create. Deleting...", namespace=namespace, name=name, ttl=ttl_value)
+        now = datetime.now(ttl_datetime.tzinfo) + timedelta(seconds=2)
+        schedule_deletion_job(scheduler, namespace, name, uid, now, annotation_key, timezone_str, dry_run, max_concurrent_deletions)
         return
     
     logger.debug("scheduling_newly_created_deployment", namespace=namespace, name=name, ttl=ttl_value)
@@ -735,26 +570,19 @@ def on_ttl_annotation_changed(
 ) -> None:
     """
     Handle changes to the TTL annotation field.
-    
-    This handler is called when the TTL annotation:
-    - Is added to an existing Deployment (old=None, new=value)
-    - Is modified (old=value1, new=value2)
-    - Is removed (old=value, new=None)
-    
-    Why use kopf.on.field()?
-    - Kopf only calls this when the SPECIFIC field changes
-    - Not called for status updates, replica changes, etc.
-    - Most efficient approach for annotation watching
-    
-    For your thesis:
-    - Explain Kopf's field-level watching (patch-based)
-    - Discuss event reduction: 1000 status updates = 0 handler calls
-    - Compare to polling: must check annotation on every iteration
-    
+
     Args:
         old: Previous TTL value (None if annotation didn't exist)
         new: New TTL value (None if annotation was removed)
     """
+
+    logger.info(
+        "handling_ttl_annotation_change",
+        namespace=namespace,
+        name=name,
+        uid=uid
+    )
+
     if not hasattr(memo, 'scheduler'):
         logger.error("scheduler_not_in_memo", namespace=namespace, name=name, handler="on_field")
         return
@@ -769,14 +597,12 @@ def on_ttl_annotation_changed(
         logger.debug("namespace_filtered_on_ttl_change", namespace=namespace, name=name)
         cancel_deletion_job(scheduler, namespace, name, uid)
         return
-    
-    # TTL annotation removed
+
     if new is None:
         logger.info("ttl_annotation_removed", namespace=namespace, name=name, old_ttl=old)
         cancel_deletion_job(scheduler, namespace, name, uid)
         return
-    
-    # TTL annotation added or modified
+
     try:
         ttl_datetime = parse_ttl(new)
     except ValueError as e:
@@ -785,7 +611,9 @@ def on_ttl_annotation_changed(
         return
     
     if is_ttl_expired(ttl_datetime, timezone_str):
-        logger.info("ttl_changed_to_expired", namespace=namespace, name=name, new_ttl=new)
+        logger.info("ttl_changed_to_expired. Deleting...", namespace=namespace, name=name, new_ttl=new)
+        now = datetime.now(ttl_datetime.tzinfo) + timedelta(seconds=2)
+        schedule_deletion_job(scheduler, namespace, name, uid, now, annotation_key, timezone_str, dry_run, max_concurrent_deletions)
         return
     
     logger.info("rescheduling_due_to_ttl_change", namespace=namespace, name=name, old_ttl=old, new_ttl=new)
@@ -801,18 +629,14 @@ def on_deployment_deleted_with_ttl(
 ) -> None:
     """
     Handle deletion of Deployments that had a TTL annotation.
-    
     Cancels any scheduled deletion jobs since the resource is already gone.
-    
-    Why handle deletions?
-    - User might manually delete the Deployment before TTL expires
-    - Prevents orphaned jobs in APScheduler
-    - Clean up is good practice
-    
-    For your thesis:
-    - Discuss garbage collection in distributed systems
-    - Explain why orphaned jobs matter (memory leaks in scheduler)
     """
+    logger.info(
+        "handling_deployment_deletion",
+        namespace=namespace,
+        name=name,
+        uid=uid
+    )
     if not hasattr(memo, 'scheduler'):
         return
     
