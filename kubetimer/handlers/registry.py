@@ -20,7 +20,6 @@ def configure_memo(memo: kopf.Memo, settings: Settings) -> None:
     memo.timezone = settings.timezone
     memo.namespace_include = settings.get_namespace_include_list()
     memo.namespace_exclude = settings.get_namespace_exclude_list()
-    memo.max_concurrent_deletions = settings.max_concurrent_deletions
     memo.config_loaded = True
     
     logger.info(
@@ -30,5 +29,4 @@ def configure_memo(memo: kopf.Memo, settings: Settings) -> None:
         exclude_namespaces=memo.namespace_exclude,
         timezone=memo.timezone,
         dry_run=memo.dry_run,
-        max_concurrent_deletions=memo.max_concurrent_deletions
     )

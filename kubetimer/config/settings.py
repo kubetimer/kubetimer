@@ -33,7 +33,6 @@ class Settings(BaseSettings):
         namespace_exclude: Comma-separated list of namespaces to exclude
         timezone: IANA timezone string for TTL comparison (e.g., America/New_York)
         dry_run: If true, log deletions without actually deleting
-        max_concurrent_deletions: Maximum parallel deletion operations
     """
     
     model_config = SettingsConfigDict(
@@ -88,13 +87,6 @@ class Settings(BaseSettings):
     dry_run: bool = Field(
         default=False,
         description="If true, log deletions without actually deleting resources"
-    )
-
-    max_concurrent_deletions: int = Field(
-        default=10,
-        ge=1,
-        le=100,
-        description="Maximum number of parallel deletion operations to prevent API throttling"
     )
 
     @field_validator('enabled_resources')

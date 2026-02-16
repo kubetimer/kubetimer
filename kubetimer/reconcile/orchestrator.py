@@ -97,7 +97,7 @@ def _triage_deployments(
     return expired, scheduled_count, error_count
 
 
-async def reconcile_existing_deployments(
+def reconcile_existing_deployments(
     memo: kopf.Memo,
     **_,
 ) -> None:
@@ -106,7 +106,7 @@ async def reconcile_existing_deployments(
     Three phases:
     1. Fetch  — list all TTL-annotated Deployments from the K8s API
     2. Triage — classify into expired vs future, schedule future ones
-    3. Delete — rate-limited bulk deletion of expired Deployments
+    3. Delete — bulk deletion of expired Deployments
     """
     starttime = time()
     if not hasattr(memo, "scheduler") or not memo.scheduler.running:
@@ -117,7 +117,6 @@ async def reconcile_existing_deployments(
     annotation_key = memo.annotation_key
     timezone_str = memo.timezone
     dry_run = memo.dry_run
-    max_concurrent_deletions = memo.max_concurrent_deletions
 
     deployments = _fetch_ttl_deployments(
         annotation_key, memo.namespace_include, memo.namespace_exclude,
@@ -129,7 +128,6 @@ async def reconcile_existing_deployments(
     logger.info(
         "reconcile_starting",
         total_with_ttl=len(deployments),
-        max_concurrent_deletions=max_concurrent_deletions,
     )
 
     expired, scheduled_count, error_count = _triage_deployments(
@@ -138,9 +136,8 @@ async def reconcile_existing_deployments(
 
     expired_count = 0
     if expired:
-        expired_count, delete_errors = await bulk_delete_expired(
-            expired, scheduler,
-            annotation_key, timezone_str, dry_run, max_concurrent_deletions,
+        expired_count, delete_errors = bulk_delete_expired(
+            expired, dry_run,
         )
         error_count += delete_errors
 

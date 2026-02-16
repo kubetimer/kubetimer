@@ -62,7 +62,7 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
             executor="default"
         )
 
-        await reconcile_existing_deployments(memo=memo)
+        reconcile_existing_deployments(memo=memo)
             
     except Exception as e:
         logger.error("startup_config_load_failed", error=str(e))
