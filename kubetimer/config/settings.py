@@ -6,14 +6,13 @@ All settings can be overridden via KUBETIMER_* environment variables.
 
 Example:
     KUBETIMER_LOG_LEVEL=DEBUG
-    KUBETIMER_ENABLED_RESOURCES=deployments,pods
     KUBETIMER_NAMESPACE_EXCLUDE=kube-system,kube-public
 """
 
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,7 +27,6 @@ class Settings(BaseSettings):
         log_format: Output format (json for production, text for development)
         kopf_log_level: Logging level for Kopf framework
         annotation_key: Annotation key to look for TTL values on resources
-        enabled_resources: Comma-separated list of resource types to watch
         namespace_include: Comma-separated list of namespaces to include (empty = all)
         namespace_exclude: Comma-separated list of namespaces to exclude
         timezone: IANA timezone string for TTL comparison (e.g., America/New_York)
@@ -63,11 +61,6 @@ class Settings(BaseSettings):
         description="Annotation key to look for TTL values"
     )
 
-    enabled_resources: str = Field(
-        default="deployments",
-        description="Comma-separated list of resource types to watch (e.g., 'deployments,pods')"
-    )
-
     namespace_include: str = Field(
         default="",
         description="Comma-separated list of namespaces to include (empty = all namespaces)"
@@ -89,33 +82,6 @@ class Settings(BaseSettings):
         description="If true, log deletions without actually deleting resources"
     )
 
-    @field_validator('enabled_resources')
-    @classmethod
-    def validate_enabled_resources(cls, v: str) -> str:
-        """
-        Validate enabled_resources contains only supported resource types.
-        """
-        supported = {'deployments', 'pods', 'replicasets'}
-        resources = {r.strip() for r in v.split(',') if r.strip()}
-        
-        invalid = resources - supported
-        if invalid:
-            raise ValueError(
-                f"Unsupported resource types: {invalid}. "
-                f"Supported types: {supported}"
-            )
-        
-        if not resources:
-            raise ValueError("At least one resource type must be enabled")
-        
-        return v
-    
-    def get_enabled_resources_list(self) -> list[str]:
-        """
-        Parse comma-separated enabled_resources into a list.
-        """
-        return [r.strip() for r in self.enabled_resources.split(',') if r.strip()]
-    
     def get_namespace_include_list(self) -> list[str]:
         """
         Parse comma-separated namespace_include into a list.

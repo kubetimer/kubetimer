@@ -48,7 +48,6 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
         
         logger.info(
             "startup_config_loaded",
-            enabled_resources=kubetimer_settings.get_enabled_resources_list(),
             dry_run=kubetimer_settings.dry_run,
             timezone=kubetimer_settings.timezone
         )
@@ -129,7 +128,6 @@ def register_all_handlers():
         "starting_kubetimer",
         version="0.1.0",
         log_level=kubetimer_settings.log_level,
-        enabled_resources=kubetimer_settings.get_enabled_resources_list(),
         dry_run=kubetimer_settings.dry_run,
         event_loop_policy="uvloop"
     )

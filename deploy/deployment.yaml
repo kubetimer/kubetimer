@@ -33,8 +33,6 @@ spec:
               value: "WARNING"
             - name: KUBETIMER_ANNOTATION_KEY
               value: "kubetimer.io/ttl"
-            - name: KUBETIMER_ENABLED_RESOURCES
-              value: "deployments"
             - name: KUBETIMER_NAMESPACE_EXCLUDE
               value: "kube-system,kube-public,kube-node-lease"
             - name: KUBETIMER_NAMESPACE_INCLUDE

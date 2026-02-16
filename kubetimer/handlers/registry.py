@@ -14,7 +14,6 @@ def configure_memo(memo: kopf.Memo, settings: Settings) -> None:
         memo: Kopf memo object to store configuration
         settings: Parsed settings from environment variables
     """
-    memo.enabled_resources = set(settings.get_enabled_resources_list())
     memo.annotation_key = settings.annotation_key
     memo.dry_run = settings.dry_run
     memo.timezone = settings.timezone
@@ -24,7 +23,6 @@ def configure_memo(memo: kopf.Memo, settings: Settings) -> None:
     
     logger.info(
         "memo_configured",
-        enabled_resources=list(memo.enabled_resources),
         include_namespaces=memo.namespace_include or "all",
         exclude_namespaces=memo.namespace_exclude,
         timezone=memo.timezone,
