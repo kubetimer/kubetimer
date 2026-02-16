@@ -28,7 +28,9 @@ async def _delete_one(
     if dry_run:
         logger.info(
             "reconcile_deployment_dry_run_delete",
-            namespace=ns, name=name, ttl=ttl_value,
+            namespace=ns,
+            name=name,
+            ttl=ttl_value,
         )
         return "dry_run"
 
@@ -36,13 +38,18 @@ async def _delete_one(
         await async_delete_namespaced_deployment(ns, name)
         logger.info(
             "reconcile_deployment_deleted",
-            namespace=ns, name=name, ttl=ttl_value,
+            namespace=ns,
+            name=name,
+            ttl=ttl_value,
         )
         return "deleted"
     except Exception as e:
         logger.error(
             "reconcile_deployment_delete_failed",
-            namespace=ns, name=name, ttl=ttl_value, error=str(e),
+            namespace=ns,
+            name=name,
+            ttl=ttl_value,
+            error=str(e),
         )
         return "error"
 
@@ -60,7 +67,8 @@ async def bulk_delete_expired(
     """
     logger.info(
         "reconcile_deleting_expired",
-        count=len(expired_deployments), dry_run=dry_run,
+        count=len(expired_deployments),
+        dry_run=dry_run,
     )
 
     results = await asyncio.gather(

@@ -4,7 +4,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.jobstores.base import JobLookupError
 
-from kubetimer.reconcile.fetcher import delete_namespaced_deployment, get_namespaced_deployment
+from kubetimer.reconcile.fetcher import (
+    delete_namespaced_deployment,
+    get_namespaced_deployment,
+)
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.time_utils import is_ttl_expired, parse_ttl
 
@@ -36,7 +39,7 @@ async def delete_deployment_job(
     job was scheduled.
     """
     job_id = _make_job_id(namespace, name, uid)
-    
+
     try:
         deployment = get_namespaced_deployment(namespace, name)
         if not deployment:
@@ -45,7 +48,7 @@ async def delete_deployment_job(
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
-                message="Deployment was already deleted before job execution"
+                message="Deployment was already deleted before job execution",
             )
             return
 
@@ -55,7 +58,7 @@ async def delete_deployment_job(
                 job_id=job_id,
                 expected_uid=uid,
                 actual_uid=deployment.metadata.uid,
-                message="Deployment was recreated, skipping deletion"
+                message="Deployment was recreated, skipping deletion",
             )
             return
 
@@ -67,7 +70,7 @@ async def delete_deployment_job(
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
-                message="TTL annotation was removed, skipping deletion"
+                message="TTL annotation was removed, skipping deletion",
             )
             return
 
@@ -80,7 +83,7 @@ async def delete_deployment_job(
                     namespace=namespace,
                     name=name,
                     ttl=ttl_value,
-                    message="TTL was updated, not expired anymore"
+                    message="TTL was updated, not expired anymore",
                 )
                 return
         except ValueError as e:
@@ -90,17 +93,17 @@ async def delete_deployment_job(
                 namespace=namespace,
                 name=name,
                 ttl=ttl_value,
-                error=str(e)
+                error=str(e),
             )
             return
-        
+
         if dry_run:
             logger.info(
                 "dry_run_deletion",
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
-                ttl=ttl_value
+                ttl=ttl_value,
             )
         else:
             delete_namespaced_deployment(namespace, name)
@@ -109,9 +112,9 @@ async def delete_deployment_job(
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
-                ttl=ttl_value
+                ttl=ttl_value,
             )
-    
+
     except Exception as e:
         logger.error(
             "deletion_job_failed",
@@ -119,7 +122,7 @@ async def delete_deployment_job(
             namespace=namespace,
             name=name,
             error=str(e),
-            error_type=type(e).__name__
+            error_type=type(e).__name__,
         )
 
 
@@ -155,25 +158,25 @@ def schedule_deletion_job(
             name=f"Delete {namespace}/{name}",
             replace_existing=True,
             kwargs={
-                'namespace': namespace,
-                'name': name,
-                'uid': uid,
-                'annotation_key': annotation_key,
-                'timezone_str': timezone_str,
-                'dry_run': dry_run,
-            }
+                "namespace": namespace,
+                "name": name,
+                "uid": uid,
+                "annotation_key": annotation_key,
+                "timezone_str": timezone_str,
+                "dry_run": dry_run,
+            },
         )
-        
+
         logger.info(
             "deletion_job_scheduled",
             job_id=job_id,
             namespace=namespace,
             name=name,
             run_date=ttl_datetime.isoformat(),
-            seconds_until_execution=(ttl_datetime - now).total_seconds()
+            seconds_until_execution=(ttl_datetime - now).total_seconds(),
         )
         return True
-    
+
     except Exception as e:
         logger.error(
             "failed_to_schedule_job",
@@ -181,7 +184,7 @@ def schedule_deletion_job(
             namespace=namespace,
             name=name,
             error=str(e),
-            error_type=type(e).__name__
+            error_type=type(e).__name__,
         )
         return False
 
@@ -194,27 +197,24 @@ def cancel_deletion_job(
 ) -> bool:
     """Cancel a scheduled deletion job.  Handles JobLookupError gracefully."""
     job_id = _make_job_id(namespace, name, uid)
-    
+
     try:
         scheduler.remove_job(job_id)
         logger.info(
-            "deletion_job_cancelled",
-            job_id=job_id,
-            namespace=namespace,
-            name=name
+            "deletion_job_cancelled", job_id=job_id, namespace=namespace, name=name
         )
         return True
-    
+
     except JobLookupError:
         logger.debug(
             "job_not_found_for_cancellation",
             job_id=job_id,
             namespace=namespace,
             name=name,
-            message="Job may have already executed or was never scheduled"
+            message="Job may have already executed or was never scheduled",
         )
         return False
-    
+
     except Exception as e:
         logger.error(
             "failed_to_cancel_job",
@@ -222,6 +222,6 @@ def cancel_deletion_job(
             namespace=namespace,
             name=name,
             error=str(e),
-            error_type=type(e).__name__
+            error_type=type(e).__name__,
         )
         return False

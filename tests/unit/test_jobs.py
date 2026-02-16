@@ -23,7 +23,6 @@ from kubetimer.scheduler.jobs import (
     schedule_deletion_job,
 )
 
-
 FUTURE = datetime.now(timezone.utc) + timedelta(hours=1)
 PAST = datetime.now(timezone.utc) - timedelta(hours=1)
 
@@ -38,8 +37,14 @@ class TestScheduleDeletionJob:
         scheduler = MagicMock()
 
         result = schedule_deletion_job(
-            scheduler, "default", "web", "uid-1", FUTURE,
-            "kubetimer.io/ttl", "UTC", False,
+            scheduler,
+            "default",
+            "web",
+            "uid-1",
+            FUTURE,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         assert result is True
@@ -49,8 +54,14 @@ class TestScheduleDeletionJob:
         scheduler = MagicMock()
 
         schedule_deletion_job(
-            scheduler, "ns", "dep", "uid-2", FUTURE,
-            "kubetimer.io/ttl", "UTC", True,
+            scheduler,
+            "ns",
+            "dep",
+            "uid-2",
+            FUTURE,
+            "kubetimer.io/ttl",
+            "UTC",
+            True,
         )
 
         _, call_kwargs = scheduler.add_job.call_args
@@ -65,8 +76,14 @@ class TestScheduleDeletionJob:
         scheduler.add_job.side_effect = RuntimeError("scheduler down")
 
         result = schedule_deletion_job(
-            scheduler, "default", "web", "uid-3", FUTURE,
-            "kubetimer.io/ttl", "UTC", False,
+            scheduler,
+            "default",
+            "web",
+            "uid-3",
+            FUTURE,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         assert result is False
@@ -113,11 +130,17 @@ class TestDeleteDeploymentJob:
     async def test_deletes_when_expired(self, mock_get, mock_delete):
         past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         mock_get.return_value = _mock_deployment(
-            uid="uid-1", annotations={"kubetimer.io/ttl": past_ttl},
+            uid="uid-1",
+            annotations={"kubetimer.io/ttl": past_ttl},
         )
 
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", dry_run=False,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            dry_run=False,
         )
 
         mock_delete.assert_called_once_with("default", "web")
@@ -128,11 +151,17 @@ class TestDeleteDeploymentJob:
     async def test_dry_run_skips_delete(self, mock_get, mock_delete):
         past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         mock_get.return_value = _mock_deployment(
-            uid="uid-1", annotations={"kubetimer.io/ttl": past_ttl},
+            uid="uid-1",
+            annotations={"kubetimer.io/ttl": past_ttl},
         )
 
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", dry_run=True,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            dry_run=True,
         )
 
         mock_delete.assert_not_called()
@@ -144,7 +173,12 @@ class TestDeleteDeploymentJob:
 
         # Should not raise
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", False,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
     @pytest.mark.asyncio
@@ -154,7 +188,12 @@ class TestDeleteDeploymentJob:
         mock_get.return_value = _mock_deployment(uid="different-uid")
 
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", False,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         mock_delete.assert_not_called()
@@ -166,7 +205,12 @@ class TestDeleteDeploymentJob:
         mock_get.return_value = _mock_deployment(uid="uid-1", annotations={})
 
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", False,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         mock_delete.assert_not_called()
@@ -177,11 +221,17 @@ class TestDeleteDeploymentJob:
     async def test_skips_when_ttl_no_longer_expired(self, mock_get, mock_delete):
         future_ttl = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
         mock_get.return_value = _mock_deployment(
-            uid="uid-1", annotations={"kubetimer.io/ttl": future_ttl},
+            uid="uid-1",
+            annotations={"kubetimer.io/ttl": future_ttl},
         )
 
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", False,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         mock_delete.assert_not_called()
@@ -191,11 +241,17 @@ class TestDeleteDeploymentJob:
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_skips_on_invalid_ttl(self, mock_get, mock_delete):
         mock_get.return_value = _mock_deployment(
-            uid="uid-1", annotations={"kubetimer.io/ttl": "garbage"},
+            uid="uid-1",
+            annotations={"kubetimer.io/ttl": "garbage"},
         )
 
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", False,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         mock_delete.assert_not_called()
@@ -207,5 +263,10 @@ class TestDeleteDeploymentJob:
 
         # Should not propagate — the job logs and swallows
         await delete_deployment_job(
-            "default", "web", "uid-1", "kubetimer.io/ttl", "UTC", False,
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )

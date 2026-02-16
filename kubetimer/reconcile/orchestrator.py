@@ -46,8 +46,10 @@ def _fetch_ttl_deployments(
         except ValueError as e:
             logger.error(
                 "reconcile_invalid_ttl",
-                namespace=dep.metadata.namespace or "<unknown>", name=dep.metadata.name or "<unknown>",
-                ttl=ttl_value, error=str(e),
+                namespace=dep.metadata.namespace or "<unknown>",
+                name=dep.metadata.name or "<unknown>",
+                ttl=ttl_value,
+                error=str(e),
             )
             continue
 
@@ -55,12 +57,14 @@ def _fetch_ttl_deployments(
         if not should_scan_namespace(ns, include_ns, exclude_ns):
             continue
 
-        deployments.append({
-            "name": dep.metadata.name,
-            "namespace": ns,
-            "uid": dep.metadata.uid,
-            "ttl_value": ttl_datetime,
-        })
+        deployments.append(
+            {
+                "name": dep.metadata.name,
+                "namespace": ns,
+                "uid": dep.metadata.uid,
+                "ttl_value": ttl_datetime,
+            }
+        )
 
     return deployments
 
@@ -87,8 +91,14 @@ def _triage_deployments(
             expired.append(dep)
         else:
             if schedule_deletion_job(
-                scheduler, dep["namespace"], dep["name"], dep["uid"],
-                ttl_datetime, annotation_key, timezone_str, dry_run,
+                scheduler,
+                dep["namespace"],
+                dep["name"],
+                dep["uid"],
+                ttl_datetime,
+                annotation_key,
+                timezone_str,
+                dry_run,
             ):
                 scheduled_count += 1
             else:
@@ -119,7 +129,9 @@ async def reconcile_existing_deployments(
     dry_run = memo.dry_run
 
     deployments = _fetch_ttl_deployments(
-        annotation_key, memo.namespace_include, memo.namespace_exclude,
+        annotation_key,
+        memo.namespace_include,
+        memo.namespace_exclude,
     )
     if not deployments:
         logger.info("reconcile_no_ttl_deployments_found")
@@ -131,13 +143,18 @@ async def reconcile_existing_deployments(
     )
 
     expired, scheduled_count, error_count = _triage_deployments(
-        deployments, scheduler, annotation_key, timezone_str, dry_run,
+        deployments,
+        scheduler,
+        annotation_key,
+        timezone_str,
+        dry_run,
     )
 
     expired_count = 0
     if expired:
         expired_count, delete_errors = await bulk_delete_expired(
-            expired, dry_run,
+            expired,
+            dry_run,
         )
         error_count += delete_errors
 

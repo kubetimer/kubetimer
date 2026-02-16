@@ -23,7 +23,6 @@ from kubetimer.reconcile.orchestrator import (
     reconcile_existing_deployments,
 )
 
-
 PAST_TTL = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 FUTURE_TTL = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
 
@@ -81,12 +80,15 @@ class TestFetchTtlDeployments:
     @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
     def test_excluded_namespace_filtered(self, mock_list):
         mock_list.return_value = _k8s_list(
-            _k8s_deployment("coredns", "kube-system",
-                            annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+            _k8s_deployment(
+                "coredns", "kube-system", annotations={"kubetimer.io/ttl": FUTURE_TTL}
+            ),
         )
 
         result = _fetch_ttl_deployments(
-            "kubetimer.io/ttl", [], ["kube-system"],
+            "kubetimer.io/ttl",
+            [],
+            ["kube-system"],
         )
 
         assert result == []
@@ -115,7 +117,11 @@ class TestTriageDeployments:
         ]
 
         expired, scheduled, errors = _triage_deployments(
-            deps, scheduler, "kubetimer.io/ttl", "UTC", False,
+            deps,
+            scheduler,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         assert len(expired) == 1
@@ -133,7 +139,11 @@ class TestTriageDeployments:
         ]
 
         expired, scheduled, errors = _triage_deployments(
-            deps, scheduler, "kubetimer.io/ttl", "UTC", False,
+            deps,
+            scheduler,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
         )
 
         assert expired == []
@@ -165,7 +175,9 @@ class TestReconcileExistingDeployments:
         # No error, just an early return after log
 
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
+    )
     @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
     async def test_all_expired_deletes_all(self, mock_list, mock_bulk, memo):
         mock_list.return_value = _k8s_list(
@@ -181,10 +193,14 @@ class TestReconcileExistingDeployments:
         assert len(args[0]) == 2  # two expired deployments passed
 
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
+    )
     @patch("kubetimer.reconcile.orchestrator.schedule_deletion_job")
     @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
-    async def test_all_future_schedules_all(self, mock_list, mock_schedule, mock_bulk, memo):
+    async def test_all_future_schedules_all(
+        self, mock_list, mock_schedule, mock_bulk, memo
+    ):
         mock_list.return_value = _k8s_list(
             _k8s_deployment("new-1", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
         )
@@ -196,10 +212,14 @@ class TestReconcileExistingDeployments:
         mock_bulk.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
+    )
     @patch("kubetimer.reconcile.orchestrator.schedule_deletion_job")
     @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
-    async def test_mixed_expired_and_future(self, mock_list, mock_schedule, mock_bulk, memo):
+    async def test_mixed_expired_and_future(
+        self, mock_list, mock_schedule, mock_bulk, memo
+    ):
         mock_list.return_value = _k8s_list(
             _k8s_deployment("old", annotations={"kubetimer.io/ttl": PAST_TTL}),
             _k8s_deployment("new", annotations={"kubetimer.io/ttl": FUTURE_TTL}),

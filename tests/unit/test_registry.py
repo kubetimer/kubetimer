@@ -31,8 +31,10 @@ class TestConfigureMemo:
     def test_defaults_produce_expected_memo(self, monkeypatch):
         # Clean env to get pure defaults
         for key in (
-            "KUBETIMER_DRY_RUN", "KUBETIMER_TIMEZONE",
-            "KUBETIMER_NAMESPACE_INCLUDE", "KUBETIMER_NAMESPACE_EXCLUDE",
+            "KUBETIMER_DRY_RUN",
+            "KUBETIMER_TIMEZONE",
+            "KUBETIMER_NAMESPACE_INCLUDE",
+            "KUBETIMER_NAMESPACE_EXCLUDE",
             "KUBETIMER_ANNOTATION_KEY",
         ):
             monkeypatch.delenv(key, raising=False)
@@ -44,4 +46,8 @@ class TestConfigureMemo:
         assert memo.dry_run is False
         assert memo.timezone == "UTC"
         assert memo.namespace_include == []
-        assert memo.namespace_exclude == ["kube-system", "kube-public", "kube-node-lease"]
+        assert memo.namespace_exclude == [
+            "kube-system",
+            "kube-public",
+            "kube-node-lease",
+        ]

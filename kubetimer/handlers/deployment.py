@@ -28,7 +28,9 @@ def on_deployment_created_with_ttl(
     """Handle creation of a Deployment that already carries a TTL annotation."""
     logger.info("handling_deployment_creation", namespace=namespace, name=name, uid=uid)
 
-    if not should_scan_namespace(namespace, memo.namespace_include, memo.namespace_exclude):
+    if not should_scan_namespace(
+        namespace, memo.namespace_include, memo.namespace_exclude
+    ):
         logger.debug("namespace_filtered_on_create", namespace=namespace, name=name)
         return
 
@@ -39,19 +41,41 @@ def on_deployment_created_with_ttl(
     try:
         ttl_datetime = parse_ttl(ttl_value)
     except ValueError as e:
-        logger.error("invalid_ttl_on_create", namespace=namespace, name=name, ttl=ttl_value, error=str(e))
+        logger.error(
+            "invalid_ttl_on_create",
+            namespace=namespace,
+            name=name,
+            ttl=ttl_value,
+            error=str(e),
+        )
         return
 
     if is_ttl_expired(ttl_datetime, memo.timezone):
-        logger.info("ttl_already_expired_on_create", namespace=namespace, name=name, ttl=ttl_value)
+        logger.info(
+            "ttl_already_expired_on_create",
+            namespace=namespace,
+            name=name,
+            ttl=ttl_value,
+        )
         delete_namespaced_deployment(namespace, name)
         return
-    
+
     else:
-        logger.info("scheduling_due_to_ttl_on_create", namespace=namespace, name=name, ttl=ttl_value)
+        logger.info(
+            "scheduling_due_to_ttl_on_create",
+            namespace=namespace,
+            name=name,
+            ttl=ttl_value,
+        )
         schedule_deletion_job(
-            memo.scheduler, namespace, name, uid, ttl_datetime,
-            memo.annotation_key, memo.timezone, memo.dry_run,
+            memo.scheduler,
+            namespace,
+            name,
+            uid,
+            ttl_datetime,
+            memo.annotation_key,
+            memo.timezone,
+            memo.dry_run,
         )
 
 
@@ -65,51 +89,68 @@ def on_ttl_annotation_changed(
     **_,
 ) -> None:
     """Handle changes to the TTL annotation field."""
-    logger.info("handling_ttl_annotation_change", namespace=namespace, name=name, uid=uid)
+    logger.info(
+        "handling_ttl_annotation_change", namespace=namespace, name=name, uid=uid
+    )
 
-    if not should_scan_namespace(namespace, memo.namespace_include, memo.namespace_exclude):
+    if not should_scan_namespace(
+        namespace, memo.namespace_include, memo.namespace_exclude
+    ):
         logger.debug("namespace_filtered_on_ttl_change", namespace=namespace, name=name)
         cancel_deletion_job(memo.scheduler, namespace, name, uid)
         return
 
     if new is None:
-        logger.info("ttl_annotation_removed", namespace=namespace, name=name, old_ttl=old)
+        logger.info(
+            "ttl_annotation_removed", namespace=namespace, name=name, old_ttl=old
+        )
         cancel_deletion_job(memo.scheduler, namespace, name, uid)
         return
 
     try:
         ttl_datetime = parse_ttl(new)
     except ValueError as e:
-        logger.error("invalid_ttl_on_change", namespace=namespace, name=name, new_ttl=new, error=str(e))
+        logger.error(
+            "invalid_ttl_on_change",
+            namespace=namespace,
+            name=name,
+            new_ttl=new,
+            error=str(e),
+        )
         cancel_deletion_job(memo.scheduler, namespace, name, uid)
         return
 
-    logger.info("rescheduling_due_to_ttl_change", namespace=namespace, name=name, old_ttl=old, new_ttl=new)
+    logger.info(
+        "rescheduling_due_to_ttl_change",
+        namespace=namespace,
+        name=name,
+        old_ttl=old,
+        new_ttl=new,
+    )
     schedule_deletion_job(
-        memo.scheduler, namespace, name, uid, ttl_datetime,
-        memo.annotation_key, memo.timezone, memo.dry_run,
+        memo.scheduler,
+        namespace,
+        name,
+        uid,
+        ttl_datetime,
+        memo.annotation_key,
+        memo.timezone,
+        memo.dry_run,
     )
 
 
 def on_deployment_deleted_with_ttl(
-    namespace: str,
-    name: str,
-    uid: str,
-    memo: kopf.Memo,
-    **_
+    namespace: str, name: str, uid: str, memo: kopf.Memo, **_
 ) -> None:
     """
     Handle deletion of Deployments that had a TTL annotation.
     Cancels any scheduled deletion jobs since the resource is already gone.
     """
-    logger.info(
-        "handling_deployment_deletion",
-        namespace=namespace,
-        name=name,
-        uid=uid
-    )
-    if not hasattr(memo, 'scheduler'):
+    logger.info("handling_deployment_deletion", namespace=namespace, name=name, uid=uid)
+    if not hasattr(memo, "scheduler"):
         return
-    
-    logger.info("deployment_deleted_cancelling_job", namespace=namespace, name=name, uid=uid)
+
+    logger.info(
+        "deployment_deleted_cancelling_job", namespace=namespace, name=name, uid=uid
+    )
     cancel_deletion_job(memo.scheduler, namespace, name, uid)

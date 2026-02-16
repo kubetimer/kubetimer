@@ -11,7 +11,10 @@ def _dep(name: str = "test-dep", namespace: str = "default") -> dict:
 
 class TestDeleteOne:
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     async def test_successful_delete(self, mock_delete):
         result = await _delete_one(_dep(), dry_run=False)
         assert result == "deleted"
@@ -23,7 +26,10 @@ class TestDeleteOne:
         assert result == "dry_run"
 
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     async def test_api_error_returns_error(self, mock_delete):
         mock_delete.side_effect = Exception("API 503")
         result = await _delete_one(_dep(), dry_run=False)
@@ -32,7 +38,10 @@ class TestDeleteOne:
 
 class TestBulkDeleteExpired:
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     async def test_counts_correct(self, mock_delete):
         deps = [_dep(f"dep-{i}") for i in range(5)]
         count, errors = await bulk_delete_expired(deps, dry_run=False)
@@ -48,7 +57,10 @@ class TestBulkDeleteExpired:
         assert errors == 0
 
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     async def test_mixed_results(self, mock_delete):
         """Two succeed, one fails → counts reflect both."""
         call_count = 0

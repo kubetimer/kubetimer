@@ -41,7 +41,8 @@ class TestGetNamespacedDeployment:
 
         assert result is sentinel
         mock_apps_v1.read_namespaced_deployment.assert_called_once_with(
-            name="web", namespace="default",
+            name="web",
+            namespace="default",
         )
 
     def test_returns_none_on_api_exception(self, mock_apps_v1):
@@ -90,5 +91,6 @@ class TestListDeploymentsAllNamespaces:
         list_deployments_all_namespaces(label_selector="app=web", limit=100)
 
         mock_apps_v1.list_deployment_for_all_namespaces.assert_called_once_with(
-            label_selector="app=web", limit=100,
+            label_selector="app=web",
+            limit=100,
         )

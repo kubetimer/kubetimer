@@ -20,7 +20,7 @@ def configure_memo(memo: kopf.Memo, settings: Settings) -> None:
     memo.namespace_include = settings.get_namespace_include_list()
     memo.namespace_exclude = settings.get_namespace_exclude_list()
     memo.config_loaded = True
-    
+
     logger.info(
         "memo_configured",
         include_namespaces=memo.namespace_include or "all",

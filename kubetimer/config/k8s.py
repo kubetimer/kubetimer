@@ -4,6 +4,7 @@ Kubernetes client configuration and factories.
 This module provides K8s client initialization and API client factories.
 Configuration is now sourced from environment variables via Settings.
 """
+
 from kubernetes import client, config
 
 from kubetimer.utils.logs import setup_logging
@@ -16,7 +17,7 @@ _connection_pool_maxsize: int = 0
 def load_k8s_config():
     """
     Load Kubernetes configuration.
-    
+
     Tries in-cluster config first (for production), falls back to
     local kubeconfig (for development).
 

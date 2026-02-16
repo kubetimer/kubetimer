@@ -6,16 +6,17 @@ import structlog
 
 from kubetimer.config.settings import get_settings
 
+
 @lru_cache(maxsize=1)
 def setup_logging():
     settings = get_settings()
-    
+
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
         level=getattr(logging, settings.log_level.upper()),
     )
-    
+
     processors = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
@@ -25,7 +26,7 @@ def setup_logging():
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
     ]
-    
+
     if settings.log_format == "json":
         processors.append(structlog.processors.JSONRenderer())
     else:
@@ -38,7 +39,7 @@ def setup_logging():
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
-    
+
     return structlog.get_logger()
 
 

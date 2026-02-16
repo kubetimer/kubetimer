@@ -7,7 +7,6 @@ from kubetimer.handlers.deployment import (
     on_deployment_deleted_with_ttl,
 )
 
-
 FUTURE_TTL = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
 PAST_TTL = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 
@@ -16,7 +15,9 @@ class TestOnDeploymentCreated:
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     def test_future_ttl_schedules_job(self, mock_schedule, memo):
         on_deployment_created_with_ttl(
-            namespace="default", name="web", uid="uid-1",
+            namespace="default",
+            name="web",
+            uid="uid-1",
             annotations={"kubetimer.io/ttl": FUTURE_TTL},
             memo=memo,
         )
@@ -25,7 +26,9 @@ class TestOnDeploymentCreated:
     @patch("kubetimer.handlers.deployment.delete_namespaced_deployment")
     def test_expired_ttl_deletes_immediately(self, mock_delete, memo):
         on_deployment_created_with_ttl(
-            namespace="default", name="web", uid="uid-1",
+            namespace="default",
+            name="web",
+            uid="uid-1",
             annotations={"kubetimer.io/ttl": PAST_TTL},
             memo=memo,
         )
@@ -34,7 +37,9 @@ class TestOnDeploymentCreated:
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     def test_excluded_namespace_skips(self, mock_schedule, memo):
         on_deployment_created_with_ttl(
-            namespace="kube-system", name="coredns", uid="uid-2",
+            namespace="kube-system",
+            name="coredns",
+            uid="uid-2",
             annotations={"kubetimer.io/ttl": FUTURE_TTL},
             memo=memo,
         )
@@ -43,7 +48,9 @@ class TestOnDeploymentCreated:
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     def test_missing_annotation_skips(self, mock_schedule, memo):
         on_deployment_created_with_ttl(
-            namespace="default", name="web", uid="uid-3",
+            namespace="default",
+            name="web",
+            uid="uid-3",
             annotations={},
             memo=memo,
         )
@@ -54,8 +61,11 @@ class TestOnTtlAnnotationChanged:
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     def test_new_ttl_reschedules(self, mock_schedule, memo):
         on_ttl_annotation_changed(
-            namespace="default", name="api", uid="uid-4",
-            old=PAST_TTL, new=FUTURE_TTL,
+            namespace="default",
+            name="api",
+            uid="uid-4",
+            old=PAST_TTL,
+            new=FUTURE_TTL,
             memo=memo,
         )
         mock_schedule.assert_called_once()
@@ -63,8 +73,11 @@ class TestOnTtlAnnotationChanged:
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     def test_annotation_removed_cancels(self, mock_cancel, memo):
         on_ttl_annotation_changed(
-            namespace="default", name="api", uid="uid-5",
-            old=FUTURE_TTL, new=None,
+            namespace="default",
+            name="api",
+            uid="uid-5",
+            old=FUTURE_TTL,
+            new=None,
             memo=memo,
         )
         mock_cancel.assert_called_once()
@@ -72,8 +85,11 @@ class TestOnTtlAnnotationChanged:
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     def test_excluded_namespace_cancels(self, mock_cancel, memo):
         on_ttl_annotation_changed(
-            namespace="kube-system", name="coredns", uid="uid-6",
-            old=None, new=FUTURE_TTL,
+            namespace="kube-system",
+            name="coredns",
+            uid="uid-6",
+            old=None,
+            new=FUTURE_TTL,
             memo=memo,
         )
         mock_cancel.assert_called_once()
@@ -81,18 +97,23 @@ class TestOnTtlAnnotationChanged:
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     def test_invalid_ttl_cancels(self, mock_cancel, memo):
         on_ttl_annotation_changed(
-            namespace="default", name="api", uid="uid-7",
-            old=FUTURE_TTL, new="not-a-date",
+            namespace="default",
+            name="api",
+            uid="uid-7",
+            old=FUTURE_TTL,
+            new="not-a-date",
             memo=memo,
         )
         mock_cancel.assert_called_once()
-        
+
 
 class TestOnDeploymentDeleted:
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     def test_cancels_scheduled_job(self, mock_cancel, memo):
         on_deployment_deleted_with_ttl(
-            namespace="default", name="web", uid="uid-8",
+            namespace="default",
+            name="web",
+            uid="uid-8",
             memo=memo,
         )
         mock_cancel.assert_called_once()
@@ -100,8 +121,11 @@ class TestOnDeploymentDeleted:
     def test_no_scheduler_does_not_crash(self):
         """If memo doesn't have a scheduler yet, handler should not raise."""
         from types import SimpleNamespace
+
         memo = SimpleNamespace()  # no .scheduler attribute
         on_deployment_deleted_with_ttl(
-            namespace="default", name="web", uid="uid-9",
+            namespace="default",
+            name="web",
+            uid="uid-9",
             memo=memo,
         )

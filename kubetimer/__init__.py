@@ -2,7 +2,7 @@
 KubeTimer - Kubernetes Resource TTL Operator.
 
 A Kubernetes operator that manages the lifecycle of resources based on
-TTL (Time-To-Live) annotations. Resources with expired TTL are deleted 
+TTL (Time-To-Live) annotations. Resources with expired TTL are deleted
 from the cluster.
 """
 
@@ -17,16 +17,20 @@ import uvloop
 
 from kubetimer.config import Settings, get_settings
 from kubetimer.config.k8s import get_connection_pool_maxsize, load_k8s_config
-from kubetimer.handlers.deployment import on_deployment_created_with_ttl, on_deployment_deleted_with_ttl, on_ttl_annotation_changed
+from kubetimer.handlers.deployment import (
+    on_deployment_created_with_ttl,
+    on_deployment_deleted_with_ttl,
+    on_ttl_annotation_changed,
+)
 from kubetimer.handlers.registry import configure_memo
 from kubetimer.reconcile.orchestrator import reconcile_existing_deployments
 from kubetimer.utils.logs import get_logger, map_log_level, setup_logging
-
 
 logger = get_logger(__name__)
 kubetimer_settings = get_settings()
 loop = uvloop.new_event_loop()
 asyncio.set_event_loop(loop)
+
 
 async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_):
 
@@ -42,24 +46,20 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
         logger.debug("thread_pool_configured", max_workers=pool_size)
 
         configure_memo(memo, kubetimer_settings)
-        
+
         logger.info(
             "startup_config_loaded",
             dry_run=kubetimer_settings.dry_run,
-            timezone=kubetimer_settings.timezone
+            timezone=kubetimer_settings.timezone,
         )
 
         scheduler = AsyncIOScheduler(event_loop=loop)
         scheduler.start()
         memo.scheduler = scheduler
-        logger.info(
-            "apscheduler_started",
-            jobstore="memory",
-            executor="default"
-        )
+        logger.info("apscheduler_started", jobstore="memory", executor="default")
 
         await reconcile_existing_deployments(memo=memo)
-            
+
     except Exception as e:
         logger.error("startup_config_load_failed", error=str(e))
         raise
@@ -74,13 +74,12 @@ def shutdown_handler(memo: kopf.Memo, **_):
     """
     logger.info("kubetimer_operator_shutting_down")
 
-    if hasattr(memo, 'scheduler') and memo.scheduler.running:
+    if hasattr(memo, "scheduler") and memo.scheduler.running:
         try:
             logger.info("shutting_down_apscheduler")
             memo.scheduler.shutdown(wait=True)
             logger.info(
-                "apscheduler_shutdown_complete",
-                message="All executing jobs completed"
+                "apscheduler_shutdown_complete", message="All executing jobs completed"
             )
         except Exception as e:
             logger.error("apscheduler_shutdown_failed", error=str(e))
@@ -91,7 +90,7 @@ def shutdown_handler(memo: kopf.Memo, **_):
 def register_all_handlers():
     """
     Register all Kopf handlers imperatively.
-    
+
     Handler lifecycle:
     1. startup_handler - Initialize config and start APScheduler
     2. index handlers - Build resource indexes from K8s watches
@@ -99,7 +98,7 @@ def register_all_handlers():
     4. shutdown_handler - Gracefully stop APScheduler on termination
     """
     logger.info("registering_kopf_handlers")
-    
+
     kopf.on.startup()(startup_handler)
     kopf.on.cleanup()(shutdown_handler)
 
@@ -107,18 +106,24 @@ def register_all_handlers():
     kopf.on.probe(id="health")(lambda **_: True)
 
     kopf.on.create(
-        'apps', 'v1', 'deployments',
-        annotations={kubetimer_settings.annotation_key: kopf.PRESENT}
+        "apps",
+        "v1",
+        "deployments",
+        annotations={kubetimer_settings.annotation_key: kopf.PRESENT},
     )(on_deployment_created_with_ttl)
-    
+
     kopf.on.field(
-        'apps', 'v1', 'deployments',
+        "apps",
+        "v1",
+        "deployments",
         field=f'metadata.annotations.{kubetimer_settings.annotation_key.replace(".", "\\.")}',
     )(on_ttl_annotation_changed)
-    
+
     kopf.on.delete(
-        'apps', 'v1', 'deployments',
-        annotations={kubetimer_settings.annotation_key: kopf.PRESENT}
+        "apps",
+        "v1",
+        "deployments",
+        annotations={kubetimer_settings.annotation_key: kopf.PRESENT},
     )(on_deployment_deleted_with_ttl)
 
     logger.info(
@@ -126,8 +131,9 @@ def register_all_handlers():
         version="0.1.0",
         log_level=kubetimer_settings.log_level,
         dry_run=kubetimer_settings.dry_run,
-        event_loop_policy="uvloop"
+        event_loop_policy="uvloop",
     )
+
 
 __all__ = [
     "Settings",

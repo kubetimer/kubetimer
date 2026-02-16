@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     """
     KubeTimer operator settings - Single source of truth for all configuration.
     """
-    
+
     model_config = SettingsConfigDict(
         env_prefix="KUBETIMER_",
         env_file=".env",
@@ -29,59 +29,56 @@ class Settings(BaseSettings):
     )
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
-        default="INFO",
-        description="Logging level for the operator"
+        default="INFO", description="Logging level for the operator"
     )
-    
+
     log_format: Literal["json", "text"] = Field(
         default="text",
-        description="Log output format (json for production, text for development)"
+        description="Log output format (json for production, text for development)",
     )
 
     kopf_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
-        default="WARNING",
-        description="Logging level for Kopf library"
+        default="WARNING", description="Logging level for Kopf library"
     )
 
     annotation_key: str = Field(
-        default="kubetimer.io/ttl",
-        description="Annotation key to look for TTL values"
+        default="kubetimer.io/ttl", description="Annotation key to look for TTL values"
     )
 
     namespace_include: str = Field(
         default="",
-        description="Comma-separated list of namespaces to include (empty = all namespaces)"
+        description="Comma-separated list of namespaces to include (empty = all namespaces)",
     )
-    
+
     namespace_exclude: str = Field(
         default="kube-system,kube-public,kube-node-lease",
-        description="Comma-separated list of namespaces to exclude"
+        description="Comma-separated list of namespaces to exclude",
     )
 
     timezone: str = Field(
         default="UTC",
-        description="IANA timezone string for TTL comparison (e.g., 'America/New_York', 'Europe/London')"
+        description="IANA timezone string for TTL comparison (e.g., 'America/New_York', 'Europe/London')",
     )
-    
+
     dry_run: bool = Field(
         default=False,
-        description="If true, log deletions without actually deleting resources"
+        description="If true, log deletions without actually deleting resources",
     )
 
     def get_namespace_include_list(self) -> list[str]:
         if not self.namespace_include.strip():
             return []
-        return [ns.strip() for ns in self.namespace_include.split(',') if ns.strip()]
-    
+        return [ns.strip() for ns in self.namespace_include.split(",") if ns.strip()]
+
     def get_namespace_exclude_list(self) -> list[str]:
-        return [ns.strip() for ns in self.namespace_exclude.split(',') if ns.strip()]
+        return [ns.strip() for ns in self.namespace_exclude.split(",") if ns.strip()]
 
 
 @lru_cache
 def get_settings() -> Settings:
     """
     Get cached settings instance.
-    
+
     Returns:
         Settings: The configured settings instance
     """

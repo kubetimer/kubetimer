@@ -7,11 +7,14 @@ class TestShouldScanNamespace:
 
     def test_excluded_wins_over_included(self):
         """If a namespace appears in both lists, exclude takes priority."""
-        assert should_scan_namespace(
-            "kube-system",
-            include_namespaces=["kube-system"],
-            exclude_namespaces=["kube-system"],
-        ) is False
+        assert (
+            should_scan_namespace(
+                "kube-system",
+                include_namespaces=["kube-system"],
+                exclude_namespaces=["kube-system"],
+            )
+            is False
+        )
 
     def test_empty_include_allows_any(self):
         assert should_scan_namespace("default", [], []) is True
