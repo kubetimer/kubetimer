@@ -16,16 +16,6 @@ kind: ClusterRole
 metadata:
   name: kubetimer-operator
 rules:
-  # Allow Kopf/Client to see CRDs to know what exists
-  - apiGroups: ["apiextensions.k8s.io"]
-    resources: ["customresourcedefinitions"]
-    verbs: ["list", "watch", "get"]
-    
-  # Watch our CRD
-  - apiGroups: ["kubetimer.io"]
-    resources: ["kubetimerconfigs"]
-    verbs: ["get", "list", "watch", "patch"]
-  
   # Manage Deployments (our target resource)
   - apiGroups: ["apps"]
     resources: ["deployments"]
