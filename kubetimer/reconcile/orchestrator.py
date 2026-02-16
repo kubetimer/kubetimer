@@ -46,7 +46,7 @@ def _fetch_ttl_deployments(
         except ValueError as e:
             logger.error(
                 "reconcile_invalid_ttl",
-                namespace=dep["namespace"], name=dep["name"],
+                namespace=dep.metadata.namespace or "<unknown>", name=dep.metadata.name or "<unknown>",
                 ttl=ttl_value, error=str(e),
             )
             continue
