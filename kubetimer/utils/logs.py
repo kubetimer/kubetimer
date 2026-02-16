@@ -1,6 +1,7 @@
 import logging
 import sys
 from functools import lru_cache
+from typing import Any
 
 import structlog
 
@@ -33,7 +34,7 @@ def setup_logging():
         processors.append(structlog.dev.ConsoleRenderer(colors=True))
 
     structlog.configure(
-        processors=processors,
+        processors=processors,  # type: ignore[arg-type]
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
@@ -43,7 +44,7 @@ def setup_logging():
     return structlog.get_logger()
 
 
-def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str = "") -> Any:
     return structlog.get_logger(name)
 
 

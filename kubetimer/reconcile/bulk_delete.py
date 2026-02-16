@@ -8,22 +8,23 @@ asyncio.to_thread so each blocking K8s HTTP call gets its own thread.
 import asyncio
 
 from kubetimer.reconcile.fetcher import async_delete_namespaced_deployment
+from kubetimer.reconcile.models import TtlDeployment
 from kubetimer.utils.logs import get_logger
 
 logger = get_logger(__name__)
 
 
 async def _delete_one(
-    dep_info: dict[str, str],
+    dep_info: TtlDeployment,
     dry_run: bool,
 ) -> str:
     """Delete a single expired Deployment.
 
     Returns one of: deleted, dry_run, error.
     """
-    ns = dep_info["namespace"]
-    name = dep_info["name"]
-    ttl_value = dep_info["ttl_value"]
+    ns = dep_info.namespace
+    name = dep_info.name
+    ttl_value = dep_info.ttl_value
 
     if dry_run:
         logger.info(
@@ -55,7 +56,7 @@ async def _delete_one(
 
 
 async def bulk_delete_expired(
-    expired_deployments: list[dict[str, str]],
+    expired_deployments: list[TtlDeployment],
     dry_run: bool,
 ) -> tuple[int, int]:
     """Delete all expired Deployments concurrently.

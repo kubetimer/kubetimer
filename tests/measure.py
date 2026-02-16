@@ -31,7 +31,7 @@ def watch_race():
         # time.sleep(1)
 
     duration = end_time - start_time
-    print(f"\n🏁 RACE FINISHED!")
+    print("\n🏁 RACE FINISHED!")
     print(f"Time Taken: {duration:.2f} seconds")
 
 

@@ -22,6 +22,7 @@ from kubetimer.reconcile.orchestrator import (
     _triage_deployments,
     reconcile_existing_deployments,
 )
+from kubetimer.reconcile.models import TtlDeployment
 
 PAST_TTL = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 FUTURE_TTL = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
@@ -57,7 +58,7 @@ class TestFetchTtlDeployments:
         result = _fetch_ttl_deployments("kubetimer.io/ttl", [], [])
 
         assert len(result) == 1
-        assert result[0]["name"] == "web"
+        assert result[0].name == "web"
 
     @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
     def test_api_error_returns_empty(self, mock_list):
@@ -112,8 +113,8 @@ class TestTriageDeployments:
         scheduler = MagicMock()
 
         deps = [
-            {"name": "old", "namespace": "default", "uid": "u1", "ttl_value": past},
-            {"name": "new", "namespace": "default", "uid": "u2", "ttl_value": future},
+            TtlDeployment(name="old", namespace="default", uid="u1", ttl_value=past),
+            TtlDeployment(name="new", namespace="default", uid="u2", ttl_value=future),
         ]
 
         expired, scheduled, errors = _triage_deployments(
@@ -125,7 +126,7 @@ class TestTriageDeployments:
         )
 
         assert len(expired) == 1
-        assert expired[0]["name"] == "old"
+        assert expired[0].name == "old"
         assert scheduled == 1
         assert errors == 0
 
@@ -135,7 +136,7 @@ class TestTriageDeployments:
         scheduler.add_job.side_effect = RuntimeError("boom")
 
         deps = [
-            {"name": "fail", "namespace": "default", "uid": "u3", "ttl_value": future},
+            TtlDeployment(name="fail", namespace="default", uid="u3", ttl_value=future),
         ]
 
         expired, scheduled, errors = _triage_deployments(

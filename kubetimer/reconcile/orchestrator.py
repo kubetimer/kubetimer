@@ -9,6 +9,7 @@ import kopf
 
 from kubetimer.reconcile.bulk_delete import bulk_delete_expired
 from kubetimer.reconcile.fetcher import list_deployments_all_namespaces
+from kubetimer.reconcile.models import TtlDeployment
 from kubetimer.scheduler.jobs import schedule_deletion_job
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.namespace import should_scan_namespace
@@ -21,11 +22,11 @@ def _fetch_ttl_deployments(
     annotation_key: str,
     include_ns: list[str],
     exclude_ns: list[str],
-) -> list[dict[str, str]]:
+) -> list[TtlDeployment]:
     """List all Deployments cluster-wide and return those with the TTL annotation.
 
     Returns:
-        List of dicts with keys: name, namespace, uid, ttl_value.
+        List of TtlDeployment instances.
         Empty list on API error.
     """
     try:
@@ -34,7 +35,7 @@ def _fetch_ttl_deployments(
         logger.error("reconcile_list_failed", error=str(e))
         return []
 
-    deployments: list[dict[str, str]] = []
+    deployments: list[TtlDeployment] = []
     for dep in all_deployments.items:
         annotations = dep.metadata.annotations or {}
         ttl_value = annotations.get(annotation_key)
@@ -58,44 +59,43 @@ def _fetch_ttl_deployments(
             continue
 
         deployments.append(
-            {
-                "name": dep.metadata.name,
-                "namespace": ns,
-                "uid": dep.metadata.uid,
-                "ttl_value": ttl_datetime,
-            }
+            TtlDeployment(
+                name=dep.metadata.name,
+                namespace=ns,
+                uid=dep.metadata.uid,
+                ttl_value=ttl_datetime,
+            )
         )
 
     return deployments
 
 
 def _triage_deployments(
-    deployments: list[dict[str, str]],
+    deployments: list[TtlDeployment],
     scheduler,
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
-) -> tuple[list[dict[str, str]], int, int]:
+) -> tuple[list[TtlDeployment], int, int]:
     """Classify deployments into expired (immediate delete) vs future (schedule).
 
     Returns:
         (expired_deployments, scheduled_count, error_count)
     """
-    expired: list[dict[str, str]] = []
+    expired: list[TtlDeployment] = []
     scheduled_count = 0
     error_count = 0
 
     for dep in deployments:
-        ttl_datetime = dep["ttl_value"]
-        if is_ttl_expired(ttl_datetime, timezone_str):
+        if is_ttl_expired(dep.ttl_value, timezone_str):
             expired.append(dep)
         else:
             if schedule_deletion_job(
                 scheduler,
-                dep["namespace"],
-                dep["name"],
-                dep["uid"],
-                ttl_datetime,
+                dep.namespace,
+                dep.name,
+                dep.uid,
+                dep.ttl_value,
                 annotation_key,
                 timezone_str,
                 dry_run,

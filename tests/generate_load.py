@@ -45,7 +45,8 @@ def create_zombies():
             print(f"Created {i}/{DEPLOYMENTS_COUNT}...")
 
     print(
-        f"✅ Setup Complete. Created {DEPLOYMENTS_COUNT} deployments in {time.time()-start:.2f}s"
+        f"✅ Setup Complete. Created {DEPLOYMENTS_COUNT} "
+        f"deployments in {time.time()-start:.2f}s"
     )
 
 

@@ -3,10 +3,16 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from kubetimer.reconcile.bulk_delete import _delete_one, bulk_delete_expired
+from kubetimer.reconcile.models import TtlDeployment
 
 
-def _dep(name: str = "test-dep", namespace: str = "default") -> dict:
-    return {"name": name, "namespace": namespace, "ttl_value": "2026-01-01T00:00:00Z"}
+def _dep(name: str = "test-dep", namespace: str = "default") -> TtlDeployment:
+    return TtlDeployment(
+        name=name,
+        namespace=namespace,
+        uid=f"uid-{name}",
+        ttl_value="2026-01-01T00:00:00Z",
+    )
 
 
 class TestDeleteOne:

@@ -47,7 +47,8 @@ class Settings(BaseSettings):
 
     namespace_include: str = Field(
         default="",
-        description="Comma-separated list of namespaces to include (empty = all namespaces)",
+        description="Comma-separated list of namespaces "
+        "to include (empty = all namespaces)",
     )
 
     namespace_exclude: str = Field(
@@ -57,7 +58,10 @@ class Settings(BaseSettings):
 
     timezone: str = Field(
         default="UTC",
-        description="IANA timezone string for TTL comparison (e.g., 'America/New_York', 'Europe/London')",
+        description=(
+            "IANA timezone string for TTL comparison"
+            " (e.g., 'America/New_York', 'Europe/London')"
+        ),
     )
 
     dry_run: bool = Field(

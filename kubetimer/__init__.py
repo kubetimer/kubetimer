@@ -110,21 +110,28 @@ def register_all_handlers():
         "v1",
         "deployments",
         annotations={kubetimer_settings.annotation_key: kopf.PRESENT},
-    )(on_deployment_created_with_ttl)
+    )(
+        on_deployment_created_with_ttl  # type: ignore[arg-type]
+    )
 
+    annotation_selector = kubetimer_settings.annotation_key.replace(".", "\\.")
     kopf.on.field(
         "apps",
         "v1",
         "deployments",
-        field=f'metadata.annotations.{kubetimer_settings.annotation_key.replace(".", "\\.")}',
-    )(on_ttl_annotation_changed)
+        field=f"metadata.annotations.{annotation_selector}",
+    )(
+        on_ttl_annotation_changed  # type: ignore[arg-type]
+    )
 
     kopf.on.delete(
         "apps",
         "v1",
         "deployments",
         annotations={kubetimer_settings.annotation_key: kopf.PRESENT},
-    )(on_deployment_deleted_with_ttl)
+    )(
+        on_deployment_deleted_with_ttl  # type: ignore[arg-type]
+    )
 
     logger.info(
         "starting_kubetimer",
