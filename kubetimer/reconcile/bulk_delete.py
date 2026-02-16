@@ -8,11 +8,8 @@ import asyncio
 
 from kubetimer.reconcile.fetcher import (
     delete_namespaced_deployment,
-    get_namespaced_deployment,
 )
-from kubetimer.scheduler.jobs import schedule_deletion_job
 from kubetimer.utils.logs import get_logger
-from kubetimer.utils.time_utils import is_ttl_expired, parse_ttl
 
 logger = get_logger(__name__)
 
@@ -26,71 +23,35 @@ async def _delete_one(
     dry_run: bool,
 ) -> str:
     """Delete a single expired Deployment, guarded by a semaphore.
-
-    Re-fetches fresh state before deleting to handle races
-    (TTL updated, Deployment recreated, already deleted).
-
     Returns one of: deleted, dry_run, skipped, rescheduled, error.
     """
     async with semaphore:
         ns = dep_info["namespace"]
         name = dep_info["name"]
-        uid = dep_info["uid"]
+        ttl_value = dep_info["ttl_value"]
+
+        if dry_run:
+            logger.info(
+                "reconcile_deployment_dry_run_delete",
+                namespace=ns, name=name, ttl=ttl_value,
+            )
+            return "dry_run"
 
         try:
-            deployment = get_namespaced_deployment(ns, name)
-            if deployment is None:
-                logger.debug("reconcile_already_deleted", namespace=ns, name=name)
-                return "skipped"
-
-            if deployment.metadata.uid != uid:
-                logger.debug(
-                    "reconcile_uid_mismatch",
-                    namespace=ns, name=name,
-                    expected_uid=uid,
-                    actual_uid=deployment.metadata.uid,
-                )
-                return "skipped"
-
-            annotations = deployment.metadata.annotations or {}
-            current_ttl = annotations.get(annotation_key)
-            if not current_ttl:
-                return "skipped"
-
-            try:
-                current_dt = parse_ttl(current_ttl)
-                if not is_ttl_expired(current_dt, timezone_str):
-                    # TTL was updated to a future time — schedule instead
-                    schedule_deletion_job(
-                        scheduler, ns, name, uid, current_dt,
-                        annotation_key, timezone_str, dry_run,
-                    )
-                    return "rescheduled"
-            except ValueError:
-                return "error"
-
-            if dry_run:
-                logger.info(
-                    "reconcile_dry_run_delete",
-                    namespace=ns, name=name, ttl=current_ttl,
-                )
-                return "dry_run"
-
             delete_namespaced_deployment(ns, name)
             logger.info(
                 "reconcile_deployment_deleted",
-                namespace=ns, name=name, ttl=current_ttl,
+                namespace=ns, name=name, ttl=ttl_value,
             )
             return "deleted"
-
         except Exception as e:
             logger.error(
-                "reconcile_delete_failed",
-                namespace=ns, name=name, error=str(e),
+                "reconcile_deployment_delete_failed",
+                namespace=ns, name=name, ttl=ttl_value, error=str(e),
             )
             return "error"
 
-
+    
 async def bulk_delete_expired(
     expired_deployments: list[dict[str, str]],
     scheduler,

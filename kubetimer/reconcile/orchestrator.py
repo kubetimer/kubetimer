@@ -4,6 +4,7 @@ Fetches all TTL-annotated Deployments via the K8s list API, schedules
 future deletions, and bulk-deletes already-expired ones.
 """
 
+from time import time
 import kopf
 
 from kubetimer.reconcile.bulk_delete import bulk_delete_expired
@@ -40,6 +41,16 @@ def _fetch_ttl_deployments(
         if not ttl_value:
             continue
 
+        try:
+            ttl_datetime = parse_ttl(ttl_value)
+        except ValueError as e:
+            logger.error(
+                "reconcile_invalid_ttl",
+                namespace=dep["namespace"], name=dep["name"],
+                ttl=ttl_value, error=str(e),
+            )
+            continue
+
         ns = dep.metadata.namespace
         if not should_scan_namespace(ns, include_ns, exclude_ns):
             continue
@@ -48,7 +59,7 @@ def _fetch_ttl_deployments(
             "name": dep.metadata.name,
             "namespace": ns,
             "uid": dep.metadata.uid,
-            "ttl_value": ttl_value,
+            "ttl_value": ttl_datetime,
         })
 
     return deployments
@@ -71,17 +82,7 @@ def _triage_deployments(
     error_count = 0
 
     for dep in deployments:
-        try:
-            ttl_datetime = parse_ttl(dep["ttl_value"])
-        except ValueError as e:
-            logger.error(
-                "reconcile_invalid_ttl",
-                namespace=dep["namespace"], name=dep["name"],
-                ttl=dep["ttl_value"], error=str(e),
-            )
-            error_count += 1
-            continue
-
+        ttl_datetime = dep["ttl_value"]
         if is_ttl_expired(ttl_datetime, timezone_str):
             expired.append(dep)
         else:
@@ -107,6 +108,7 @@ async def reconcile_existing_deployments(
     2. Triage — classify into expired vs future, schedule future ones
     3. Delete — rate-limited bulk deletion of expired Deployments
     """
+    starttime = time()
     if not hasattr(memo, "scheduler") or not memo.scheduler.running:
         logger.error("reconcile_skipped_no_scheduler")
         return
@@ -147,4 +149,5 @@ async def reconcile_existing_deployments(
         scheduled=scheduled_count,
         expired_deleted=expired_count,
         errors=error_count,
+        duration_seconds=f"{time() - starttime:.9f}",
     )
