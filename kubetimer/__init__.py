@@ -6,7 +6,7 @@ TTL (Time-To-Live) annotations. Resources with expired TTL are deleted
 from the cluster.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Ryan Carvalho"
 
 import asyncio
@@ -135,7 +135,7 @@ def register_all_handlers():
 
     logger.info(
         "starting_kubetimer",
-        version="0.1.0",
+        version=__version__,
         log_level=kubetimer_settings.log_level,
         dry_run=kubetimer_settings.dry_run,
         event_loop_policy="uvloop",

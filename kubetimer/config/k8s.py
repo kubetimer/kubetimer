@@ -38,11 +38,17 @@ def load_k8s_config():
     logger.debug("k8s_connection_pool_maxsize", pool_size=_connection_pool_maxsize)
 
 
-def get_connection_pool_maxsize() -> int:
+def get_connection_pool_maxsize() -> int | None:
     """Return the K8s client's connection_pool_maxsize.
 
     Available after load_k8s_config() has been called.
     """
+    if _connection_pool_maxsize == 0:
+        logger.warning(
+            "connection_pool_maxsize_not_set",
+            message="load_k8s_config() must be called before getting pool size",
+        )
+        return None
     return _connection_pool_maxsize
 
 
