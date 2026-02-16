@@ -327,16 +327,7 @@ def schedule_deletion_job(
 ) -> bool:
     """
     Schedule a deletion job at TTL expiry time.
-    
-    Why DateTrigger?
-    - Executes job exactly once at specified datetime
-    - More efficient than checking periodically
-    - APScheduler's heap ensures O(log n) scheduling
-    
-    Why return bool?
-    - Allows caller to know if scheduling succeeded
-    - Useful for logging/metrics
-    
+
     Args:
         scheduler: APScheduler instance from memo
         namespace: Kubernetes namespace
@@ -352,8 +343,7 @@ def schedule_deletion_job(
         True if job was scheduled, False if already expired or error
     """
     job_id = _make_job_id(namespace, name, uid)
-    
-    # Check if TTL is already expired (handle startup backlog)
+
     now = datetime.now(ttl_datetime.tzinfo)
     if ttl_datetime <= now:
         logger.debug(
@@ -518,7 +508,7 @@ def on_deployment_created_with_ttl(
     **kwargs
 ) -> None:
 
-    logger.debug(
+    logger.info(
         "handling_deployment_creation",
         namespace=namespace,
         name=name,
@@ -642,3 +632,318 @@ def on_deployment_deleted_with_ttl(
     
     logger.info("deployment_deleted_cancelling_job", namespace=namespace, name=name, uid=uid)
     cancel_deletion_job(memo.scheduler, namespace, name, uid)
+
+
+def _fetch_ttl_deployments(
+    annotation_key: str,
+    include_ns: List[str],
+    exclude_ns: List[str],
+) -> List[Dict[str, str]]:
+    """
+    List all Deployments cluster-wide and return those that have the TTL
+    annotation and pass namespace filtering.
+
+    Returns:
+        List of dicts with keys: name, namespace, uid, ttl_value.
+        Empty list on API error (error is logged internally).
+    """
+    apps_v1 = apps_v1_client()
+    try:
+        all_deployments = apps_v1.list_deployment_for_all_namespaces(
+            field_selector=f'metadata.annotations.{annotation_key}'
+        )
+    except client.ApiException as e:
+        logger.error("reconcile_list_failed", error=str(e))
+        return []
+
+    deployments: List[Dict[str, str]] = []
+    for dep in all_deployments.items:
+        annotations = dep.metadata.annotations or {}
+        ttl_value = annotations.get(annotation_key)
+        if not ttl_value:
+            continue
+
+        ns = dep.metadata.namespace
+        name = dep.metadata.name
+        uid = dep.metadata.uid
+
+        if not should_scan_namespace(ns, include_ns, exclude_ns):
+            continue
+
+        deployments.append({
+            'name': name,
+            'namespace': ns,
+            'uid': uid,
+            'ttl_value': ttl_value,
+        })
+
+    return deployments
+
+
+def _triage_deployments(
+    deployments: List[Dict[str, str]],
+    scheduler: AsyncIOScheduler,
+    annotation_key: str,
+    timezone_str: str,
+    dry_run: bool,
+    max_concurrent_deletions: int,
+) -> tuple[List[Dict[str, str]], int, int]:
+    """
+    Classify deployments into *expired* (need immediate deletion) and
+    *future* (schedule an APScheduler job).
+
+    Returns:
+        (expired_deployments, scheduled_count, error_count)
+    """
+    expired: List[Dict[str, str]] = []
+    scheduled_count = 0
+    error_count = 0
+
+    for dep in deployments:
+        name = dep['name']
+        ns = dep['namespace']
+        uid = dep['uid']
+        ttl_value = dep['ttl_value']
+
+        try:
+            ttl_datetime = parse_ttl(ttl_value)
+        except ValueError as e:
+            logger.error(
+                "reconcile_invalid_ttl",
+                namespace=ns,
+                name=name,
+                ttl=ttl_value,
+                error=str(e),
+            )
+            error_count += 1
+            continue
+
+        if is_ttl_expired(ttl_datetime, timezone_str):
+            expired.append(dep)
+        else:
+            scheduled = schedule_deletion_job(
+                scheduler, ns, name, uid, ttl_datetime,
+                annotation_key, timezone_str, dry_run, max_concurrent_deletions,
+            )
+            if scheduled:
+                scheduled_count += 1
+            else:
+                error_count += 1
+
+    return expired, scheduled_count, error_count
+
+
+async def _delete_expired_deployment(
+    dep_info: Dict[str, str],
+    semaphore: asyncio.Semaphore,
+    scheduler: AsyncIOScheduler,
+    annotation_key: str,
+    timezone_str: str,
+    dry_run: bool,
+    max_concurrent_deletions: int,
+) -> str:
+    """
+    Delete a single expired Deployment, guarded by a semaphore.
+
+    Why a top-level function instead of a closure?
+    - Closures capture mutable locals → subtle bugs if the enclosing
+      scope changes between scheduling and execution
+    - Module-level functions are directly importable for unit tests
+    - Explicit parameters make dependencies visible
+
+    Returns:
+        One of "deleted", "dry_run", "skipped", "rescheduled", "error".
+    """
+    async with semaphore:
+        ns = dep_info['namespace']
+        dep_name = dep_info['name']
+        dep_uid = dep_info['uid']
+
+        try:
+            apps_v1 = apps_v1_client()
+
+            try:
+                deployment = apps_v1.read_namespaced_deployment(
+                    name=dep_name, namespace=ns
+                )
+            except client.ApiException as e:
+                if e.status == 404:
+                    logger.debug(
+                        "reconcile_already_deleted",
+                        namespace=ns,
+                        name=dep_name,
+                    )
+                    return "skipped"
+                raise
+
+            if deployment.metadata.uid != dep_uid:
+                logger.debug(
+                    "reconcile_uid_mismatch",
+                    namespace=ns,
+                    name=dep_name,
+                    expected_uid=dep_uid,
+                    actual_uid=deployment.metadata.uid,
+                )
+                return "skipped"
+
+            annotations = deployment.metadata.annotations or {}
+            current_ttl = annotations.get(annotation_key)
+            if not current_ttl:
+                return "skipped"
+
+            try:
+                current_dt = parse_ttl(current_ttl)
+                if not is_ttl_expired(current_dt, timezone_str):
+                    schedule_deletion_job(
+                        scheduler, ns, dep_name, dep_uid, current_dt,
+                        annotation_key, timezone_str, dry_run,
+                        max_concurrent_deletions,
+                    )
+                    return "rescheduled"
+            except ValueError:
+                return "error"
+
+            if dry_run:
+                logger.info(
+                    "reconcile_dry_run_delete",
+                    namespace=ns,
+                    name=dep_name,
+                    ttl=current_ttl,
+                )
+                return "dry_run"
+
+            apps_v1.delete_namespaced_deployment(
+                name=dep_name,
+                namespace=ns,
+                body=client.V1DeleteOptions(),
+            )
+            logger.info(
+                "reconcile_deployment_deleted",
+                namespace=ns,
+                name=dep_name,
+                ttl=current_ttl,
+            )
+            return "deleted"
+
+        except Exception as e:
+            logger.error(
+                "reconcile_delete_failed",
+                namespace=ns,
+                name=dep_name,
+                error=str(e),
+            )
+            return "error"
+
+
+async def _bulk_delete_expired(
+    expired_deployments: List[Dict[str, str]],
+    scheduler: AsyncIOScheduler,
+    annotation_key: str,
+    timezone_str: str,
+    dry_run: bool,
+    max_concurrent_deletions: int,
+) -> tuple[int, int]:
+    """
+    Delete all expired Deployments concurrently, rate-limited by a semaphore.
+
+    - Encapsulates the gather + result-counting pattern
+    - The semaphore is created here (single owner, clear lifetime)
+    - Caller only cares about aggregate counts, not individual results
+
+    Returns:
+        (expired_deleted_count, error_count)
+    """
+    logger.info(
+        "reconcile_deleting_expired",
+        count=len(expired_deployments),
+        dry_run=dry_run,
+    )
+
+    semaphore = asyncio.Semaphore(max_concurrent_deletions)
+
+    results = await asyncio.gather(
+        *[
+            _delete_expired_deployment(
+                dep, semaphore, scheduler,
+                annotation_key, timezone_str, dry_run,
+                max_concurrent_deletions,
+            )
+            for dep in expired_deployments
+        ],
+        return_exceptions=True,
+    )
+
+    expired_count = 0
+    error_count = 0
+    for r in results:
+        if isinstance(r, Exception):
+            error_count += 1
+        elif r in ("deleted", "dry_run"):
+            expired_count += 1
+        elif r == "error":
+            error_count += 1
+
+    return expired_count, error_count
+
+
+# ============================================================================
+# Reconcile Orchestrator
+# ============================================================================
+
+async def reconcile_existing_deployments(
+    memo: kopf.Memo,
+    **_
+) -> None:
+    """
+    Reconcile all existing Deployments at operator startup.
+
+    Orchestrates three phases:
+    1. Fetch — list all TTL-annotated Deployments from the K8s API
+    2. Triage — classify into expired vs future, schedule future ones
+    3. Delete — rate-limited bulk deletion of expired Deployments
+    """
+    if not hasattr(memo, 'scheduler') or not memo.scheduler.running:
+        logger.error("reconcile_skipped_no_scheduler")
+        return
+
+    scheduler = memo.scheduler
+    annotation_key = memo.annotation_key
+    timezone_str = memo.timezone
+    dry_run = memo.dry_run
+    max_concurrent_deletions = memo.max_concurrent_deletions
+
+    # Phase 1 — Fetch
+    deployments = _fetch_ttl_deployments(
+        annotation_key, memo.namespace_include, memo.namespace_exclude,
+    )
+    if not deployments:
+        logger.info("reconcile_no_ttl_deployments_found")
+        return
+
+    logger.info(
+        "reconcile_starting",
+        total_with_ttl=len(deployments),
+        max_concurrent_deletions=max_concurrent_deletions,
+    )
+
+    # Phase 2 — Triage
+    expired, scheduled_count, error_count = _triage_deployments(
+        deployments, scheduler,
+        annotation_key, timezone_str, dry_run, max_concurrent_deletions,
+    )
+
+    # Phase 3 — Delete expired
+    expired_count = 0
+    if expired:
+        expired_count, delete_errors = await _bulk_delete_expired(
+            expired, scheduler,
+            annotation_key, timezone_str, dry_run, max_concurrent_deletions,
+        )
+        error_count += delete_errors
+
+    logger.info(
+        "reconcile_complete",
+        scheduled=scheduled_count,
+        expired_deleted=expired_count,
+        errors=error_count,
+    )

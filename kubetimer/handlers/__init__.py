@@ -2,37 +2,26 @@
 Handlers for KubeTimer operator.
 
 Exports:
-- Index handler functions for each resource type
-- Event handler functions for APScheduler-based deletion scheduling (REFACTORED)
-- Timer handlers for TTL scanning (DEPRECATED - will be removed)
-- Registry functions for handler registration
+- Event handler functions for APScheduler-based deletion scheduling
+- Startup reconciliation for existing Deployments
+- Registry functions for memo configuration
 """
 
 from kubetimer.handlers.deployment import (
-    deployment_indexer,
-    deployment_handler,
     on_deployment_created_with_ttl,
     on_ttl_annotation_changed,
     on_deployment_deleted_with_ttl,
+    reconcile_existing_deployments,
 )
 
 from kubetimer.handlers.registry import (
-    init_memo,
     configure_memo,
-    register_all_indexes,
-    is_index_registered_in_memo,
-    get_registered_indexes_from_memo,
 )
 
 __all__ = [
-    "deployment_indexer",
-    "deployment_handler",
     "on_deployment_created_with_ttl",
     "on_ttl_annotation_changed",
     "on_deployment_deleted_with_ttl",
-    "init_memo",
+    "reconcile_existing_deployments",
     "configure_memo",
-    "register_all_indexes",
-    "is_index_registered_in_memo",
-    "get_registered_indexes_from_memo",
 ]

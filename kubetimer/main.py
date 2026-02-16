@@ -14,13 +14,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kubetimer.config.k8s import load_k8s_config
 from kubetimer.config.settings import get_settings
 from kubetimer.handlers import (
-    deployment_indexer,
     on_deployment_created_with_ttl,
     on_ttl_annotation_changed,
     on_deployment_deleted_with_ttl,
-    init_memo,
+    reconcile_existing_deployments,
     configure_memo,
-    register_all_indexes,
 )
 from kubetimer.utils.logs import map_log_level, setup_logging
 
@@ -31,7 +29,15 @@ loop = uvloop.new_event_loop()
 asyncio.set_event_loop(loop)
 
 
-def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_):
+async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_):
+    """
+    Initialize operator on startup.
+    
+    Execution order guarantee:
+    - Kopf completes ALL startup activities before starting watches
+    - This means reconcile runs BEFORE on_deployment_created_with_ttl fires
+    - No race conditions: jobs are scheduled here, then on.create handles new ones
+    """
     logger.info("kubetimer_operator_starting_up")
     settings.execution.max_workers = 20
     settings.posting.level = map_log_level(kubetimer_settings.kopf_log_level)
@@ -55,14 +61,12 @@ def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_):
             jobstore="memory",
             executor="default"
         )
+
+        await reconcile_existing_deployments(memo=memo)
             
     except Exception as e:
         logger.error("startup_config_load_failed", error=str(e))
         raise
-
-
-_registration_memo = kopf.Memo()
-init_memo(_registration_memo)
 
 
 def shutdown_handler(memo: kopf.Memo, **_):
@@ -103,14 +107,9 @@ def register_all_handlers():
     kopf.on.startup()(startup_handler)
     kopf.on.cleanup()(shutdown_handler)
 
-    register_all_indexes(
-        memo=_registration_memo,
-        deployment_index_fn=deployment_indexer
-    )
-
     # Health probe for K8s liveness checks
     kopf.on.probe(id="health")(lambda **_: True)
-    
+
     kopf.on.create(
         'apps', 'v1', 'deployments',
         annotations={kubetimer_settings.annotation_key: kopf.PRESENT}
@@ -125,8 +124,6 @@ def register_all_handlers():
         'apps', 'v1', 'deployments',
         annotations={kubetimer_settings.annotation_key: kopf.PRESENT}
     )(on_deployment_deleted_with_ttl)
-
-    # Should already look for expired deployments
 
 
 register_all_handlers()
