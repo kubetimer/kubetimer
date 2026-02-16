@@ -12,9 +12,9 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  CI:
     runs-on: ubuntu-latest
-
+    name: Tests and Checks
     steps:
       - uses: actions/checkout@v4
 
