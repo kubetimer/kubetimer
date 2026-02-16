@@ -29,6 +29,9 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=6.0",
     "pytest-asyncio>=1.0",
+    "black>=26.1.0",
+    "flake8>=7.0",
+    "mypy>=1.15",
 ]
 
 [tool.pytest.ini_options]
@@ -36,3 +39,16 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-v"
+
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
