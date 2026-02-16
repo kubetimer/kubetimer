@@ -1,6 +1,6 @@
 [project]
 name = "kubetimer"
-version = "0.1.0"
+version = "0.2.0"
 description = "A way to manage lifecycle of Kubernetes resources using time."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -25,4 +25,14 @@ packages = ["kubetimer"]
 installer = "uv"
 
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=1.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v"

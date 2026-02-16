@@ -19,18 +19,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """
     KubeTimer operator settings - Single source of truth for all configuration.
-    
-    All settings can be configured via environment variables with KUBETIMER_ prefix.
-    
-    Attributes:
-        log_level: Logging level for the operator
-        log_format: Output format (json for production, text for development)
-        kopf_log_level: Logging level for Kopf framework
-        annotation_key: Annotation key to look for TTL values on resources
-        namespace_include: Comma-separated list of namespaces to include (empty = all)
-        namespace_exclude: Comma-separated list of namespaces to exclude
-        timezone: IANA timezone string for TTL comparison (e.g., America/New_York)
-        dry_run: If true, log deletions without actually deleting
     """
     
     model_config = SettingsConfigDict(
@@ -39,8 +27,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
-    
-    # Logging configuration
+
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO",
         description="Logging level for the operator"
@@ -71,7 +58,6 @@ class Settings(BaseSettings):
         description="Comma-separated list of namespaces to exclude"
     )
 
-    # TTL and deletion behavior
     timezone: str = Field(
         default="UTC",
         description="IANA timezone string for TTL comparison (e.g., 'America/New_York', 'Europe/London')"
@@ -83,17 +69,11 @@ class Settings(BaseSettings):
     )
 
     def get_namespace_include_list(self) -> list[str]:
-        """
-        Parse comma-separated namespace_include into a list.
-        """
         if not self.namespace_include.strip():
             return []
         return [ns.strip() for ns in self.namespace_include.split(',') if ns.strip()]
     
     def get_namespace_exclude_list(self) -> list[str]:
-        """
-        Parse comma-separated namespace_exclude into a list.
-        """
         return [ns.strip() for ns in self.namespace_exclude.split(',') if ns.strip()]
 
 
@@ -101,9 +81,6 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """
     Get cached settings instance.
-    
-    Uses @lru_cache so settings are loaded once and reused.
-    This is efficient and ensures consistent configuration.
     
     Returns:
         Settings: The configured settings instance
