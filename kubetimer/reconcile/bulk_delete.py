@@ -43,7 +43,6 @@ async def _delete_one(
                 logger.debug("reconcile_already_deleted", namespace=ns, name=name)
                 return "skipped"
 
-            # Verify UID matches (not a recreated Deployment)
             if deployment.metadata.uid != uid:
                 logger.debug(
                     "reconcile_uid_mismatch",
@@ -53,7 +52,6 @@ async def _delete_one(
                 )
                 return "skipped"
 
-            # Re-verify TTL is still expired
             annotations = deployment.metadata.annotations or {}
             current_ttl = annotations.get(annotation_key)
             if not current_ttl:

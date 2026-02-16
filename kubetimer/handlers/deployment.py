@@ -8,10 +8,11 @@ from typing import Dict, Optional
 
 import kopf
 
+from kubetimer.reconcile.fetcher import delete_namespaced_deployment
 from kubetimer.scheduler.jobs import cancel_deletion_job, schedule_deletion_job
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.namespace import should_scan_namespace
-from kubetimer.utils.time_utils import parse_ttl
+from kubetimer.utils.time_utils import is_ttl_expired, parse_ttl
 
 logger = get_logger(__name__)
 
@@ -41,10 +42,17 @@ def on_deployment_created_with_ttl(
         logger.error("invalid_ttl_on_create", namespace=namespace, name=name, ttl=ttl_value, error=str(e))
         return
 
-    schedule_deletion_job(
-        memo.scheduler, namespace, name, uid, ttl_datetime,
-        memo.annotation_key, memo.timezone, memo.dry_run,
-    )
+    if is_ttl_expired(ttl_datetime, memo.timezone):
+        logger.info("ttl_already_expired_on_create", namespace=namespace, name=name, ttl=ttl_value)
+        delete_namespaced_deployment(namespace, name)
+        return
+    
+    else:
+        logger.info("scheduling_due_to_ttl_on_create", namespace=namespace, name=name, ttl=ttl_value)
+        schedule_deletion_job(
+            memo.scheduler, namespace, name, uid, ttl_datetime,
+            memo.annotation_key, memo.timezone, memo.dry_run,
+        )
 
 
 def on_ttl_annotation_changed(
