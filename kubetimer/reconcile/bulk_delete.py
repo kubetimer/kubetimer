@@ -1,18 +1,19 @@
 """Bulk deletion of expired Deployments.
 
 Used by the reconcile orchestrator at startup to delete Deployments
-whose TTL has already passed.
+whose TTL has already passed.  Deletions run concurrently via
+asyncio.to_thread so each blocking K8s HTTP call gets its own thread.
 """
 
-from kubetimer.reconcile.fetcher import (
-    delete_namespaced_deployment,
-)
+import asyncio
+
+from kubetimer.reconcile.fetcher import async_delete_namespaced_deployment
 from kubetimer.utils.logs import get_logger
 
 logger = get_logger(__name__)
 
 
-def _delete_one(
+async def _delete_one(
     dep_info: dict[str, str],
     dry_run: bool,
 ) -> str:
@@ -32,7 +33,7 @@ def _delete_one(
         return "dry_run"
 
     try:
-        delete_namespaced_deployment(ns, name)
+        await async_delete_namespaced_deployment(ns, name)
         logger.info(
             "reconcile_deployment_deleted",
             namespace=ns, name=name, ttl=ttl_value,
@@ -46,11 +47,14 @@ def _delete_one(
         return "error"
 
 
-def bulk_delete_expired(
+async def bulk_delete_expired(
     expired_deployments: list[dict[str, str]],
     dry_run: bool,
 ) -> tuple[int, int]:
-    """Delete all expired Deployments sequentially.
+    """Delete all expired Deployments concurrently.
+
+    Each K8s API call is offloaded to a thread via asyncio.to_thread,
+    so all deletions execute in parallel rather than sequentially.
 
     Returns (expired_deleted_count, error_count).
     """
@@ -59,14 +63,19 @@ def bulk_delete_expired(
         count=len(expired_deployments), dry_run=dry_run,
     )
 
+    results = await asyncio.gather(
+        *[_delete_one(dep, dry_run) for dep in expired_deployments],
+        return_exceptions=True,
+    )
+
     expired_count = 0
     error_count = 0
-
-    for dep in expired_deployments:
-        result = _delete_one(dep, dry_run)
-        if result in ("deleted", "dry_run"):
+    for r in results:
+        if isinstance(r, Exception):
+            error_count += 1
+        elif r in ("deleted", "dry_run"):
             expired_count += 1
-        elif result == "error":
+        elif r == "error":
             error_count += 1
 
     return expired_count, error_count

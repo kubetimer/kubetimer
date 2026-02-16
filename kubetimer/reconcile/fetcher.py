@@ -2,7 +2,12 @@
 
 Thin layer over the kubernetes client that handles ApiException
 and returns None / logs errors so callers don't need try/except.
+Sync functions are used by the scheduler jobs (which run in APScheduler's
+thread pool). Async variants use asyncio.to_thread for concurrent I/O
+during startup reconciliation.
 """
+
+import asyncio
 
 from kubernetes.client.exceptions import ApiException
 from kubernetes.client import V1DeleteOptions
@@ -31,6 +36,11 @@ def delete_namespaced_deployment(namespace: str, name: str):
         name=name, namespace=namespace,
         body=V1DeleteOptions(),
     )
+
+
+async def async_delete_namespaced_deployment(namespace: str, name: str):
+    """Delete a Deployment in a thread so the event loop stays free."""
+    await asyncio.to_thread(delete_namespaced_deployment, namespace, name)
 
 
 def list_deployments_all_namespaces(**kwargs):

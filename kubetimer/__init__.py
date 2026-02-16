@@ -2,29 +2,21 @@
 KubeTimer - Kubernetes Resource TTL Operator.
 
 A Kubernetes operator that manages the lifecycle of resources based on
-TTL (Time-To-Live) annotations. Resources with expired TTL are automatically
-deleted from the cluster.
-
-Usage:
-    kopf run kubetimer/main.py --standalone
-
-Environment Variables:
-    KUBETIMER_LOG_LEVEL: Kubetimer logging level (default: INFO)
-    KUBETIMER_KOPF_LOG_LEVEL: Kopf logging level (default: WARNING)
-    KUBETIMER_LOG_FORMAT: Log format, json or text (default: text)
-    KUBETIMER_CHECK_INTERVAL: Check interval in seconds (default: 60)
+TTL (Time-To-Live) annotations. Resources with expired TTL are deleted 
+from the cluster.
 """
 
 __version__ = "0.1.0"
 __author__ = "Ryan Carvalho"
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import kopf
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import uvloop
 
 from kubetimer.config import Settings, get_settings
-from kubetimer.config.k8s import load_k8s_config
+from kubetimer.config.k8s import get_connection_pool_maxsize, load_k8s_config
 from kubetimer.handlers.deployment import on_deployment_created_with_ttl, on_deployment_deleted_with_ttl, on_ttl_annotation_changed
 from kubetimer.handlers.registry import configure_memo
 from kubetimer.reconcile.orchestrator import reconcile_existing_deployments
@@ -44,6 +36,11 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
 
     try:
         load_k8s_config()
+
+        pool_size = get_connection_pool_maxsize()
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=pool_size))
+        logger.debug("thread_pool_configured", max_workers=pool_size)
+
         configure_memo(memo, kubetimer_settings)
         
         logger.info(
@@ -61,7 +58,7 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
             executor="default"
         )
 
-        reconcile_existing_deployments(memo=memo)
+        await reconcile_existing_deployments(memo=memo)
             
     except Exception as e:
         logger.error("startup_config_load_failed", error=str(e))

@@ -97,7 +97,7 @@ def _triage_deployments(
     return expired, scheduled_count, error_count
 
 
-def reconcile_existing_deployments(
+async def reconcile_existing_deployments(
     memo: kopf.Memo,
     **_,
 ) -> None:
@@ -106,7 +106,7 @@ def reconcile_existing_deployments(
     Three phases:
     1. Fetch  — list all TTL-annotated Deployments from the K8s API
     2. Triage — classify into expired vs future, schedule future ones
-    3. Delete — bulk deletion of expired Deployments
+    3. Delete — concurrent bulk deletion of expired Deployments
     """
     starttime = time()
     if not hasattr(memo, "scheduler") or not memo.scheduler.running:
@@ -136,7 +136,7 @@ def reconcile_existing_deployments(
 
     expired_count = 0
     if expired:
-        expired_count, delete_errors = bulk_delete_expired(
+        expired_count, delete_errors = await bulk_delete_expired(
             expired, dry_run,
         )
         error_count += delete_errors
