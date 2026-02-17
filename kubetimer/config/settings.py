@@ -12,7 +12,9 @@ Example:
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -68,6 +70,20 @@ class Settings(BaseSettings):
         default=False,
         description="If true, log deletions without actually deleting resources",
     )
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, v: str) -> str:
+        if v == "UTC":
+            return v
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, KeyError):
+            raise ValueError(
+                f"Invalid timezone: {v!r}. "
+                "Use IANA format like 'America/New_York' or 'Europe/London'."
+            )
+        return v
 
     def get_namespace_include_list(self) -> list[str]:
         if not self.namespace_include.strip():

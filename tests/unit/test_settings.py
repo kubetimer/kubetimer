@@ -5,6 +5,8 @@ runs with a clean config.  We also clear the @lru_cache on get_settings
 to avoid cross-test pollution.
 """
 
+import pytest
+
 from kubetimer.config.settings import Settings
 
 
@@ -40,3 +42,17 @@ class TestSettings:
         monkeypatch.setenv("KUBETIMER_NAMESPACE_EXCLUDE", "kube-system,monitoring")
         s = Settings(_env_file=None)
         assert s.get_namespace_exclude_list() == ["kube-system", "monitoring"]
+
+    def test_timezone_default_utc(self):
+        s = Settings(_env_file=None)
+        assert s.timezone == "UTC"
+
+    def test_timezone_valid_iana(self, monkeypatch):
+        monkeypatch.setenv("KUBETIMER_TIMEZONE", "America/New_York")
+        s = Settings(_env_file=None)
+        assert s.timezone == "America/New_York"
+
+    def test_timezone_invalid_raises(self, monkeypatch):
+        monkeypatch.setenv("KUBETIMER_TIMEZONE", "Not/A_Timezone")
+        with pytest.raises(Exception, match="Invalid timezone"):
+            Settings(_env_file=None)
