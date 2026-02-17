@@ -7,23 +7,31 @@ APScheduler DateTrigger jobs (not periodic polling).
 
 import asyncio
 import kopf
+import uvloop
 
 from kubetimer import register_all_handlers
 from kubetimer.utils.logs import setup_logging
 
 setup_logging()
+
+loop = uvloop.new_event_loop()
+asyncio.set_event_loop(loop)
+
 register_all_handlers()
 
 
 def main():
     """
     Main entry point for KubeTimer operator.
+
+    Uses the uvloop event loop created at module level for
+    high-performance async I/O.
     """
     kopf.run(
         standalone=True,
         clusterwide=True,
         liveness_endpoint="http://0.0.0.0:8080/healthz",
-        loop=asyncio.get_event_loop(),
+        loop=loop,
     )
 
 

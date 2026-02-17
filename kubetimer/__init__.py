@@ -13,7 +13,6 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import kopf
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import uvloop
 
 from kubetimer.config import Settings, get_settings
 from kubetimer.config.k8s import get_connection_pool_maxsize, load_k8s_config
@@ -28,8 +27,6 @@ from kubetimer.utils.logs import get_logger, map_log_level, setup_logging
 
 logger = get_logger(__name__)
 kubetimer_settings = get_settings()
-loop = uvloop.new_event_loop()
-asyncio.set_event_loop(loop)
 
 
 async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_):
@@ -40,6 +37,8 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
 
     try:
         load_k8s_config()
+
+        loop = asyncio.get_event_loop()
 
         pool_size = get_connection_pool_maxsize()
         loop.set_default_executor(ThreadPoolExecutor(max_workers=pool_size))
@@ -53,7 +52,7 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
             timezone=kubetimer_settings.timezone,
         )
 
-        scheduler = AsyncIOScheduler(event_loop=loop)
+        scheduler = AsyncIOScheduler()
         scheduler.start()
         memo.scheduler = scheduler
         logger.info("apscheduler_started", jobstore="memory", executor="default")

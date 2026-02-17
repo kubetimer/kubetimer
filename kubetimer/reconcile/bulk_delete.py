@@ -41,7 +41,7 @@ async def _delete_one(
             "reconcile_deployment_deleted",
             namespace=ns,
             name=name,
-            ttl=ttl_value,
+            ttl=ttl_value.isoformat(),
         )
         return "deleted"
     except Exception as e:
