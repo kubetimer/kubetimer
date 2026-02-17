@@ -47,6 +47,7 @@ class TestStartupHandler:
 
         executor = loop._default_executor
         assert executor._max_workers == 10
+        assert memo.executor is executor
 
     @pytest.mark.asyncio
     @patch("kubetimer.reconcile_existing_deployments", new_callable=AsyncMock)
@@ -129,3 +130,34 @@ class TestShutdownHandler:
         shutdown_handler(memo)
 
         memo.scheduler.shutdown.assert_called_once_with(wait=True)
+
+    def test_executor_shutdown_on_cleanup(self):
+        """ThreadPoolExecutor should be shut down with wait=True."""
+        memo = SimpleNamespace()
+        memo.scheduler = MagicMock()
+        memo.scheduler.running = True
+        memo.executor = MagicMock()
+
+        shutdown_handler(memo)
+
+        memo.executor.shutdown.assert_called_once_with(wait=True)
+
+    def test_no_executor_does_not_raise(self):
+        """Missing executor attribute should not crash."""
+        memo = SimpleNamespace()
+        # no .scheduler, no .executor
+
+        shutdown_handler(memo)
+
+    def test_executor_shutdown_exception_is_caught(self):
+        """If executor.shutdown() raises, the error should be caught."""
+        memo = SimpleNamespace()
+        memo.scheduler = MagicMock()
+        memo.scheduler.running = True
+        memo.executor = MagicMock()
+        memo.executor.shutdown.side_effect = RuntimeError("executor failed")
+
+        # Should not raise
+        shutdown_handler(memo)
+
+        memo.executor.shutdown.assert_called_once_with(wait=True)

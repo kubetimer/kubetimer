@@ -41,7 +41,9 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
         loop = asyncio.get_event_loop()
 
         pool_size = get_connection_pool_maxsize()
-        loop.set_default_executor(ThreadPoolExecutor(max_workers=pool_size))
+        executor = ThreadPoolExecutor(max_workers=pool_size)
+        loop.set_default_executor(executor)
+        memo.executor = executor
         logger.debug("thread_pool_configured", max_workers=pool_size)
 
         configure_memo(memo, kubetimer_settings)
@@ -84,6 +86,14 @@ def shutdown_handler(memo: kopf.Memo, **_):
             logger.error("apscheduler_shutdown_failed", error=str(e))
     else:
         logger.warning("apscheduler_not_running_during_shutdown")
+
+    if hasattr(memo, "executor"):
+        try:
+            logger.info("shutting_down_thread_pool_executor")
+            memo.executor.shutdown(wait=True)
+            logger.info("thread_pool_executor_shutdown_complete")
+        except Exception as e:
+            logger.error("thread_pool_executor_shutdown_failed", error=str(e))
 
 
 def register_all_handlers():
