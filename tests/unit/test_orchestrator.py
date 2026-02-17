@@ -197,6 +197,30 @@ class TestReconcileExistingDeployments:
     @patch(
         "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
     )
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    async def test_expired_uids_added_to_reconciling_set(
+        self, mock_list, mock_bulk, memo
+    ):
+        """Expired UIDs should be registered in reconciling_uids before deletion."""
+        captured_uids = set()
+
+        async def capture_uids(deps, dry_run):
+            captured_uids.update(memo.reconciling_uids)
+            return (len(deps), 0)
+
+        mock_bulk.side_effect = capture_uids
+        mock_list.return_value = _k8s_list(
+            _k8s_deployment("old-1", annotations={"kubetimer.io/ttl": PAST_TTL}),
+        )
+
+        await reconcile_existing_deployments(memo)
+
+        assert "uid-old-1" in captured_uids
+
+    @pytest.mark.asyncio
+    @patch(
+        "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
+    )
     @patch("kubetimer.reconcile.orchestrator.schedule_deletion_job")
     @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
     async def test_all_future_schedules_all(

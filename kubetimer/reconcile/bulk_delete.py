@@ -7,6 +7,8 @@ asyncio.to_thread so each blocking K8s HTTP call gets its own thread.
 
 import asyncio
 
+from kubernetes.client.exceptions import ApiException
+
 from kubetimer.reconcile.fetcher import async_delete_namespaced_deployment
 from kubetimer.reconcile.models import TtlDeployment
 from kubetimer.utils.logs import get_logger
@@ -44,6 +46,23 @@ async def _delete_one(
             ttl=ttl_value.isoformat(),
         )
         return "deleted"
+    except ApiException as e:
+        if e.status == 404:
+            logger.info(
+                "reconcile_deployment_already_gone",
+                namespace=ns,
+                name=name,
+                message="Deployment was already deleted (likely by event handler)",
+            )
+            return "deleted"
+        logger.error(
+            "reconcile_deployment_delete_failed",
+            namespace=ns,
+            name=name,
+            ttl=ttl_value,
+            error=str(e),
+        )
+        return "error"
     except Exception as e:
         logger.error(
             "reconcile_deployment_delete_failed",

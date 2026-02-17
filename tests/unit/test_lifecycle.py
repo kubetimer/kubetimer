@@ -71,6 +71,9 @@ class TestStartupHandler:
 
         mock_reconcile.assert_awaited_once_with(memo=memo)
 
+        assert memo.reconciliation_done is True
+        assert memo.reconciling_uids == set()
+
         assert settings.execution.max_workers == 20
         assert settings.posting.level is not None
 

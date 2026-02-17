@@ -28,6 +28,16 @@ async def on_deployment_created_with_ttl(
     """Handle creation of a Deployment that already carries a TTL annotation."""
     logger.info("handling_deployment_creation", namespace=namespace, name=name, uid=uid)
 
+    reconciling_uids: set = getattr(memo, "reconciling_uids", set())
+    if uid in reconciling_uids:
+        logger.debug(
+            "skipping_create_during_reconciliation",
+            namespace=namespace,
+            name=name,
+            uid=uid,
+        )
+        return
+
     if not should_scan_namespace(
         namespace, memo.namespace_include, memo.namespace_exclude
     ):
@@ -92,6 +102,16 @@ def on_ttl_annotation_changed(
     logger.info(
         "handling_ttl_annotation_change", namespace=namespace, name=name, uid=uid
     )
+
+    reconciling_uids: set = getattr(memo, "reconciling_uids", set())
+    if uid in reconciling_uids:
+        logger.debug(
+            "skipping_update_during_reconciliation",
+            namespace=namespace,
+            name=name,
+            uid=uid,
+        )
+        return
 
     if not should_scan_namespace(
         namespace, memo.namespace_include, memo.namespace_exclude

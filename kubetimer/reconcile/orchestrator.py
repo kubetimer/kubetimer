@@ -152,6 +152,9 @@ async def reconcile_existing_deployments(
 
     expired_count = 0
     if expired:
+        reconciling_uids: set[str] = getattr(memo, "reconciling_uids", set())
+        reconciling_uids.update(dep.uid for dep in expired)
+
         expired_count, delete_errors = await bulk_delete_expired(
             expired,
             dry_run,

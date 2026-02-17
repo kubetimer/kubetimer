@@ -22,4 +22,6 @@ def memo():
     m.config_loaded = True
     m.scheduler = MagicMock()
     m.scheduler.running = True
+    m.reconciling_uids = set()
+    m.reconciliation_done = True
     return m

@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from kubernetes.client.exceptions import ApiException
 
 from kubetimer.reconcile.bulk_delete import _delete_one, bulk_delete_expired
 from kubetimer.reconcile.models import TtlDeployment
@@ -41,6 +42,17 @@ class TestDeleteOne:
         mock_delete.side_effect = Exception("API 503")
         result = await _delete_one(_dep(), dry_run=False)
         assert result == "error"
+
+    @pytest.mark.asyncio
+    @patch(
+        "kubetimer.reconcile.bulk_delete.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
+    async def test_404_treated_as_already_deleted(self, mock_delete):
+        """A 404 means the deployment was already gone (race with event handler)."""
+        mock_delete.side_effect = ApiException(status=404, reason="Not Found")
+        result = await _delete_one(_dep(), dry_run=False)
+        assert result == "deleted"
 
 
 class TestBulkDeleteExpired:

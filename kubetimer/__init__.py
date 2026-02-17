@@ -59,7 +59,14 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
         memo.scheduler = scheduler
         logger.info("apscheduler_started", jobstore="memory", executor="default")
 
+        memo.reconciling_uids = set()
+        memo.reconciliation_done = False
+
         await reconcile_existing_deployments(memo=memo)
+
+        memo.reconciliation_done = True
+        memo.reconciling_uids.clear()
+        logger.info("reconciliation_complete_handlers_unblocked")
 
     except Exception as e:
         logger.error("startup_config_load_failed", error=str(e))
