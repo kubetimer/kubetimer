@@ -38,6 +38,7 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
     logger.info("kubetimer_operator_starting_up")
     settings.execution.max_workers = 20
     settings.posting.level = map_log_level(kubetimer_settings.kopf_log_level)
+    settings.scanning.disabled = True
 
     try:
         load_k8s_config()
