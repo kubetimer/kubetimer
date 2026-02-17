@@ -18,6 +18,18 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _validate_prefix(prefix: str) -> bool:
+    return (len(prefix) <= 253 and all(c.isalnum() or c in "-." for c in prefix.split(".")))
+
+
+def _validate_name(name: str) -> bool:
+    return (
+        len(name) <= 63
+        and name[0].isalnum()
+        and name[-1].isalnum()
+        and all(c.isalnum() or c in "-._" for c in name)
+    )
+
 class Settings(BaseSettings):
     """
     KubeTimer operator settings - Single source of truth for all configuration.
@@ -71,6 +83,15 @@ class Settings(BaseSettings):
         description="If true, log deletions without actually deleting resources",
     )
 
+    def get_namespace_include_list(self) -> list[str]:
+        if not self.namespace_include.strip():
+            return []
+        return [ns.strip() for ns in self.namespace_include.split(",") if ns.strip()]
+
+    def get_namespace_exclude_list(self) -> list[str]:
+        return [ns.strip() for ns in self.namespace_exclude.split(",") if ns.strip()]
+
+
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, v: str) -> str:
@@ -84,15 +105,31 @@ class Settings(BaseSettings):
                 "Use IANA format like 'America/New_York' or 'Europe/London'."
             )
         return v
-
-    def get_namespace_include_list(self) -> list[str]:
-        if not self.namespace_include.strip():
-            return []
-        return [ns.strip() for ns in self.namespace_include.split(",") if ns.strip()]
-
-    def get_namespace_exclude_list(self) -> list[str]:
-        return [ns.strip() for ns in self.namespace_exclude.split(",") if ns.strip()]
-
+    
+    @field_validator("annotation_key")
+    @classmethod
+    def validate_annotation_key(cls, v: str) -> str:
+        if not v:
+            raise ValueError("Annotation key cannot be empty.")
+        
+        splitted = v.split("/", 1)
+        if len(splitted) == 1:
+            name = splitted[0]
+            if not _validate_name(name):
+                raise ValueError(
+                    f"Invalid annotation key: {v!r}. "
+                    "Must be a valid Kubernetes annotation key (DNS subdomain (optional) + '/' + name)."
+                )
+            return v
+        elif len(splitted) == 2:
+            prefix, name = splitted
+            if prefix and not _validate_prefix(prefix) and not _validate_name(prefix):
+                raise ValueError(
+                    f"Invalid annotation key prefix: {prefix!r}. "
+                    "Must be a valid DNS subdomain (e.g., 'example.com')."
+                )
+        return v
+    
 
 @lru_cache
 def get_settings() -> Settings:

@@ -34,11 +34,20 @@ def get_namespaced_deployment(namespace: str, name: str):
 
 def delete_namespaced_deployment(namespace: str, name: str):
     apps_v1 = apps_v1_client()
-    apps_v1.delete_namespaced_deployment(
-        name=name,
-        namespace=namespace,
-        body=V1DeleteOptions(),
-    )
+    try:
+        apps_v1.delete_namespaced_deployment(
+            name=name,
+            namespace=namespace,
+            body=V1DeleteOptions(),
+        )
+    except ApiException as e:
+        logger.error(
+            "error_deleting_deployment",
+            namespace=namespace,
+            name=name,
+            error=str(e),
+        )
+        return None
 
 
 async def async_delete_namespaced_deployment(namespace: str, name: str):
