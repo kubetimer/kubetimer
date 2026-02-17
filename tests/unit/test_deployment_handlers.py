@@ -13,8 +13,8 @@ PAST_TTL = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 
 class TestOnDeploymentCreated:
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
-    def test_future_ttl_schedules_job(self, mock_schedule, memo):
-        on_deployment_created_with_ttl(
+    async def test_future_ttl_schedules_job(self, mock_schedule, memo):
+        await on_deployment_created_with_ttl(
             namespace="default",
             name="web",
             uid="uid-1",
@@ -23,20 +23,20 @@ class TestOnDeploymentCreated:
         )
         mock_schedule.assert_called_once()
 
-    @patch("kubetimer.handlers.deployment.delete_namespaced_deployment")
-    def test_expired_ttl_deletes_immediately(self, mock_delete, memo):
-        on_deployment_created_with_ttl(
+    @patch("kubetimer.handlers.deployment.async_delete_namespaced_deployment")
+    async def test_expired_ttl_deletes_immediately(self, mock_delete, memo):
+        await on_deployment_created_with_ttl(
             namespace="default",
             name="web",
             uid="uid-1",
             annotations={"kubetimer.io/ttl": PAST_TTL},
             memo=memo,
         )
-        mock_delete.assert_called_once_with("default", "web")
+        mock_delete.assert_awaited_once_with("default", "web")
 
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
-    def test_excluded_namespace_skips(self, mock_schedule, memo):
-        on_deployment_created_with_ttl(
+    async def test_excluded_namespace_skips(self, mock_schedule, memo):
+        await on_deployment_created_with_ttl(
             namespace="kube-system",
             name="coredns",
             uid="uid-2",
@@ -46,8 +46,8 @@ class TestOnDeploymentCreated:
         mock_schedule.assert_not_called()
 
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
-    def test_missing_annotation_skips(self, mock_schedule, memo):
-        on_deployment_created_with_ttl(
+    async def test_missing_annotation_skips(self, mock_schedule, memo):
+        await on_deployment_created_with_ttl(
             namespace="default",
             name="web",
             uid="uid-3",

@@ -8,7 +8,7 @@ from typing import Dict, Optional
 
 import kopf
 
-from kubetimer.reconcile.fetcher import delete_namespaced_deployment
+from kubetimer.reconcile.fetcher import async_delete_namespaced_deployment
 from kubetimer.scheduler.jobs import cancel_deletion_job, schedule_deletion_job
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.namespace import should_scan_namespace
@@ -17,7 +17,7 @@ from kubetimer.utils.time_utils import is_ttl_expired, parse_ttl
 logger = get_logger(__name__)
 
 
-def on_deployment_created_with_ttl(
+async def on_deployment_created_with_ttl(
     namespace: str,
     name: str,
     uid: str,
@@ -57,7 +57,7 @@ def on_deployment_created_with_ttl(
             name=name,
             ttl=ttl_value,
         )
-        delete_namespaced_deployment(namespace, name)
+        await async_delete_namespaced_deployment(namespace, name)
         return
 
     else:
