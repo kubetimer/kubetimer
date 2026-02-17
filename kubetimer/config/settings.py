@@ -78,7 +78,7 @@ class Settings(BaseSettings):
             return v
         try:
             ZoneInfo(v)
-        except (ZoneInfoNotFoundError, KeyError):
+        except ZoneInfoNotFoundError, KeyError:
             raise ValueError(
                 f"Invalid timezone: {v!r}. "
                 "Use IANA format like 'America/New_York' or 'Europe/London'."

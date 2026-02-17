@@ -76,9 +76,7 @@ class TestOnDeploymentCreated:
         mock_schedule.assert_not_called()
 
     @patch("kubetimer.handlers.deployment.async_delete_namespaced_deployment")
-    async def test_processes_when_uid_not_in_reconciling_set(
-        self, mock_delete, memo
-    ):
+    async def test_processes_when_uid_not_in_reconciling_set(self, mock_delete, memo):
         """If reconciling_uids exists but doesn't contain this UID, proceed."""
         memo.reconciling_uids = {"other-uid"}
 
@@ -144,9 +142,7 @@ class TestOnTtlAnnotationChanged:
 
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
-    def test_skips_when_uid_in_reconciling_set(
-        self, mock_schedule, mock_cancel, memo
-    ):
+    def test_skips_when_uid_in_reconciling_set(self, mock_schedule, mock_cancel, memo):
         """If reconciliation owns this UID, skip all processing."""
         memo.reconciling_uids.add("uid-rc")
 

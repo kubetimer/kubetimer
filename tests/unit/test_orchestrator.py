@@ -13,10 +13,11 @@ Covers:
 
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from tests.conftest import _create_scheduler_mock
 from kubetimer.reconcile.orchestrator import (
     _fetch_ttl_deployments,
     _triage_deployments,
@@ -26,9 +27,6 @@ from kubetimer.reconcile.models import TtlDeployment
 
 PAST_TTL = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 FUTURE_TTL = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
-
-
-# ── helpers ───────────────────────────────────────────────────────────
 
 
 def _k8s_deployment(name, namespace="default", annotations=None):
@@ -110,7 +108,7 @@ class TestTriageDeployments:
     def test_separates_expired_and_future(self):
         past = datetime.now(timezone.utc) - timedelta(hours=1)
         future = datetime.now(timezone.utc) + timedelta(hours=1)
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
 
         deps = [
             TtlDeployment(name="old", namespace="default", uid="u1", ttl_value=past),
@@ -132,7 +130,7 @@ class TestTriageDeployments:
 
     def test_schedule_failure_increments_errors(self):
         future = datetime.now(timezone.utc) + timedelta(hours=1)
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
         scheduler.add_job.side_effect = RuntimeError("boom")
 
         deps = [
@@ -162,7 +160,7 @@ class TestReconcileExistingDeployments:
 
     @pytest.mark.asyncio
     async def test_skips_when_scheduler_not_running(self, memo):
-        memo.scheduler.running = False
+        memo.scheduler._set_running(False)
 
         await reconcile_existing_deployments(memo)
 

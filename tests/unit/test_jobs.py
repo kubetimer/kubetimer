@@ -11,11 +11,12 @@ Covers:
 
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from apscheduler.jobstores.base import JobLookupError
 
+from tests.conftest import _create_scheduler_mock
 from kubetimer.scheduler.jobs import (
     _make_job_id,
     cancel_deletion_job,
@@ -34,7 +35,7 @@ class TestMakeJobId:
 
 class TestScheduleDeletionJob:
     def test_returns_true_on_success(self):
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
 
         result = schedule_deletion_job(
             scheduler,
@@ -51,7 +52,7 @@ class TestScheduleDeletionJob:
         scheduler.add_job.assert_called_once()
 
     def test_passes_correct_kwargs_to_add_job(self):
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
 
         schedule_deletion_job(
             scheduler,
@@ -72,7 +73,7 @@ class TestScheduleDeletionJob:
         assert job_kwargs["dry_run"] is True
 
     def test_returns_false_on_exception(self):
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
         scheduler.add_job.side_effect = RuntimeError("scheduler down")
 
         result = schedule_deletion_job(
@@ -91,7 +92,7 @@ class TestScheduleDeletionJob:
 
 class TestCancelDeletionJob:
     def test_returns_true_on_success(self):
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
 
         result = cancel_deletion_job(scheduler, "default", "web", "uid-1")
 
@@ -99,7 +100,7 @@ class TestCancelDeletionJob:
         scheduler.remove_job.assert_called_once_with("default/web/uid-1")
 
     def test_returns_false_on_job_lookup_error(self):
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
         scheduler.remove_job.side_effect = JobLookupError("default/web/uid-1")
 
         result = cancel_deletion_job(scheduler, "default", "web", "uid-1")
@@ -107,7 +108,7 @@ class TestCancelDeletionJob:
         assert result is False
 
     def test_returns_false_on_generic_error(self):
-        scheduler = MagicMock()
+        scheduler = _create_scheduler_mock()
         scheduler.remove_job.side_effect = RuntimeError("oops")
 
         result = cancel_deletion_job(scheduler, "default", "web", "uid-1")

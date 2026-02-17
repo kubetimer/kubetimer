@@ -10,6 +10,7 @@ Covers:
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from tests.conftest import _create_scheduler_mock
 
 import pytest
 
@@ -32,13 +33,18 @@ class TestStartupHandler:
     @patch("kubetimer.get_connection_pool_maxsize", return_value=10)
     @patch("kubetimer.load_k8s_config")
     async def test_configures_thread_pool_from_k8s_pool_size(
-        self, mock_load, mock_pool_size, mock_configure, mock_sched_cls, mock_reconcile
+        self,
+        mock_load,
+        mock_pool_size,
+        mock_configure,
+        mock_sched_cls,
+        mock_reconcile,
+        memo,
     ):
         """Thread pool max_workers should match the K8s connection pool size."""
-        mock_scheduler = MagicMock()
+        mock_scheduler = _create_scheduler_mock()
         mock_sched_cls.return_value = mock_scheduler
 
-        memo = SimpleNamespace()
         settings = _kopf_settings()
 
         loop = asyncio.get_event_loop()
@@ -56,12 +62,17 @@ class TestStartupHandler:
     @patch("kubetimer.get_connection_pool_maxsize", return_value=4)
     @patch("kubetimer.load_k8s_config")
     async def test_starts_apscheduler_and_settings(
-        self, mock_load, mock_pool_size, mock_configure, mock_sched_cls, mock_reconcile
+        self,
+        mock_load,
+        mock_pool_size,
+        mock_configure,
+        mock_sched_cls,
+        mock_reconcile,
+        memo,
     ):
-        mock_scheduler = MagicMock()
+        mock_scheduler = _create_scheduler_mock()
         mock_sched_cls.return_value = mock_scheduler
 
-        memo = SimpleNamespace()
         settings = _kopf_settings()
 
         await startup_handler(settings, memo)
@@ -86,8 +97,7 @@ class TestStartupHandler:
 
     @pytest.mark.asyncio
     @patch("kubetimer.load_k8s_config", side_effect=Exception("no cluster"))
-    async def test_raises_on_k8s_config_failure(self, mock_load):
-        memo = SimpleNamespace()
+    async def test_raises_on_k8s_config_failure(self, mock_load, memo):
         settings = _kopf_settings()
 
         with pytest.raises(Exception, match="no cluster"):
@@ -95,38 +105,23 @@ class TestStartupHandler:
 
 
 class TestShutdownHandler:
-    def test_graceful_shutdown_waits_for_jobs(self):
+    def test_graceful_shutdown_waits_for_jobs(self, memo):
         """Scheduler should be shut down with wait=True."""
-        memo = SimpleNamespace()
-        memo.scheduler = MagicMock()
-        memo.scheduler.running = True
-
         shutdown_handler(memo)
 
         memo.scheduler.shutdown.assert_called_once_with(wait=True)
+        assert memo.scheduler.running is False
 
-    def test_no_scheduler_attribute_does_not_raise(self):
-        """Missing scheduler attribute should not crash."""
-        memo = SimpleNamespace()  # no .scheduler
-
-        # Should complete without raising any exception
-        shutdown_handler(memo)
-
-    def test_scheduler_not_running_skips_shutdown(self):
+    def test_scheduler_not_running_skips_shutdown(self, memo):
         """If the scheduler isn't running, shutdown() should not be called."""
-        memo = SimpleNamespace()
-        memo.scheduler = MagicMock()
-        memo.scheduler.running = False
+        memo.scheduler._set_running(False)
 
         shutdown_handler(memo)
 
         memo.scheduler.shutdown.assert_not_called()
 
-    def test_scheduler_shutdown_exception_is_caught(self):
+    def test_scheduler_shutdown_exception_is_caught(self, memo):
         """If scheduler.shutdown() raises, the error should be caught."""
-        memo = SimpleNamespace()
-        memo.scheduler = MagicMock()
-        memo.scheduler.running = True
         memo.scheduler.shutdown.side_effect = RuntimeError("shutdown failed")
 
         # Should not raise
@@ -134,11 +129,8 @@ class TestShutdownHandler:
 
         memo.scheduler.shutdown.assert_called_once_with(wait=True)
 
-    def test_executor_shutdown_on_cleanup(self):
+    def test_executor_shutdown_on_cleanup(self, memo):
         """ThreadPoolExecutor should be shut down with wait=True."""
-        memo = SimpleNamespace()
-        memo.scheduler = MagicMock()
-        memo.scheduler.running = True
         memo.executor = MagicMock()
 
         shutdown_handler(memo)
@@ -150,13 +142,11 @@ class TestShutdownHandler:
         memo = SimpleNamespace()
         # no .scheduler, no .executor
 
+        # Should complete without raising any exception
         shutdown_handler(memo)
 
-    def test_executor_shutdown_exception_is_caught(self):
+    def test_executor_shutdown_exception_is_caught(self, memo):
         """If executor.shutdown() raises, the error should be caught."""
-        memo = SimpleNamespace()
-        memo.scheduler = MagicMock()
-        memo.scheduler.running = True
         memo.executor = MagicMock()
         memo.executor.shutdown.side_effect = RuntimeError("executor failed")
 
