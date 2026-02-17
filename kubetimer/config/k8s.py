@@ -5,6 +5,8 @@ This module provides K8s client initialization and API client factories.
 Configuration is now sourced from environment variables via Settings.
 """
 
+from functools import lru_cache
+
 from kubernetes import client, config
 
 from kubetimer.utils.logs import setup_logging
@@ -52,17 +54,13 @@ def get_connection_pool_maxsize() -> int | None:
     return _connection_pool_maxsize
 
 
-_apps_v1: client.AppsV1Api | None = None
-
-
+@lru_cache(maxsize=1)
 def apps_v1_client() -> client.AppsV1Api:
     """
     Return a cached AppsV1Api client for managing Deployments.
 
     A single instance is reused so urllib3 connection pooling
-    stays effective across concurrent calls.
+    stays effective across concurrent calls. The @lru_cache
+    decorator provides thread-safe, lazy initialization.
     """
-    global _apps_v1
-    if _apps_v1 is None:
-        _apps_v1 = client.AppsV1Api()
-    return _apps_v1
+    return client.AppsV1Api()

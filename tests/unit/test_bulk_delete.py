@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ def _dep(name: str = "test-dep", namespace: str = "default") -> TtlDeployment:
         name=name,
         namespace=namespace,
         uid=f"uid-{name}",
-        ttl_value="2026-01-01T00:00:00Z",
+        ttl_value=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
 
 
