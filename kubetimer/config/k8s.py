@@ -64,3 +64,17 @@ def apps_v1_client() -> client.AppsV1Api:
     decorator provides thread-safe, lazy initialization.
     """
     return client.AppsV1Api()
+
+
+def close_k8s_clients() -> None:
+    """
+    Close the cached K8s API client and its urllib3 connection pool.
+    """
+    cached_client = apps_v1_client.cache_info()
+    if cached_client.currsize > 0:
+        try:
+            apps_v1_client().api_client.close()
+        except Exception:
+            pass
+        apps_v1_client.cache_clear()
+        logger.info("k8s_api_client_closed")

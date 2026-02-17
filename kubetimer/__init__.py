@@ -15,7 +15,11 @@ import kopf
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from kubetimer.config import Settings, get_settings
-from kubetimer.config.k8s import get_connection_pool_maxsize, load_k8s_config
+from kubetimer.config.k8s import (
+    close_k8s_clients,
+    get_connection_pool_maxsize,
+    load_k8s_config,
+)
 from kubetimer.handlers.deployment import (
     on_deployment_created_with_ttl,
     on_deployment_deleted_with_ttl,
@@ -73,14 +77,16 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
         raise
 
 
-def shutdown_handler(memo: kopf.Memo, **_):
+async def shutdown_handler(memo: kopf.Memo, **_):
     """
     Gracefully shutdown operator on termination.
-    - Allows in-flight deletion jobs to complete
-    - Prevents orphaned jobs (jobs scheduled but not executed)
-    - Ensures clean state for Kubernetes pod lifecycle
     """
     logger.info("kubetimer_operator_shutting_down")
+
+    try:
+        close_k8s_clients()
+    except Exception as e:
+        logger.error("k8s_client_close_failed", error=str(e))
 
     if hasattr(memo, "scheduler") and memo.scheduler.running:
         try:
@@ -100,7 +106,10 @@ def shutdown_handler(memo: kopf.Memo, **_):
             memo.executor.shutdown(wait=True)
             logger.info("thread_pool_executor_shutdown_complete")
         except Exception as e:
-            logger.error("thread_pool_executor_shutdown_failed", error=str(e))
+            logger.error(
+                "thread_pool_executor_shutdown_failed",
+                error=str(e),
+            )
 
 
 def register_all_handlers():

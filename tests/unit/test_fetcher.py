@@ -62,11 +62,11 @@ class TestDeleteNamespacedDeployment:
         assert kwargs["name"] == "api-server"
         assert kwargs["namespace"] == "staging"
 
-    def test_propagates_api_exception(self, mock_apps_v1):
+    def test_returns_none_on_api_exception(self, mock_apps_v1):
         mock_apps_v1.delete_namespaced_deployment.side_effect = ApiException(status=403)
 
-        with pytest.raises(ApiException):
-            delete_namespaced_deployment("default", "forbidden")
+        result = delete_namespaced_deployment("default", "forbidden")
+        assert result is None
 
 
 class TestAsyncDeleteNamespacedDeployment:

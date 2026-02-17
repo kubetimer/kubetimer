@@ -105,52 +105,60 @@ class TestStartupHandler:
 
 
 class TestShutdownHandler:
-    def test_graceful_shutdown_waits_for_jobs(self, memo):
-        """Scheduler should be shut down with wait=True."""
-        shutdown_handler(memo)
+    async def test_closes_k8s_clients_first(self, memo):
+        """K8s API client sockets should be closed before other cleanup."""
+        with patch("kubetimer.close_k8s_clients") as mock_close:
+            await shutdown_handler(memo)
+
+            mock_close.assert_called_once()
+
+    async def test_graceful_shutdown_stops_scheduler(self, memo):
+        """Scheduler should be shut down with wait=False."""
+        await shutdown_handler(memo)
 
         memo.scheduler.shutdown.assert_called_once_with(wait=True)
         assert memo.scheduler.running is False
 
-    def test_scheduler_not_running_skips_shutdown(self, memo):
+    async def test_scheduler_not_running_skips_shutdown(self, memo):
         """If the scheduler isn't running, shutdown() should not be called."""
         memo.scheduler._set_running(False)
 
-        shutdown_handler(memo)
+        await shutdown_handler(memo)
 
         memo.scheduler.shutdown.assert_not_called()
 
-    def test_scheduler_shutdown_exception_is_caught(self, memo):
+    async def test_scheduler_shutdown_exception_is_caught(self, memo):
         """If scheduler.shutdown() raises, the error should be caught."""
         memo.scheduler.shutdown.side_effect = RuntimeError("shutdown failed")
 
         # Should not raise
-        shutdown_handler(memo)
+        await shutdown_handler(memo)
 
         memo.scheduler.shutdown.assert_called_once_with(wait=True)
 
-    def test_executor_shutdown_on_cleanup(self, memo):
-        """ThreadPoolExecutor should be shut down with wait=True."""
+    async def test_executor_shutdown_on_cleanup(self, memo):
+        """ThreadPoolExecutor should be shut down non-blocking."""
         memo.executor = MagicMock()
 
-        shutdown_handler(memo)
+        await shutdown_handler(memo)
 
         memo.executor.shutdown.assert_called_once_with(wait=True)
 
-    def test_no_executor_does_not_raise(self):
+    async def test_no_executor_does_not_raise(self):
         """Missing executor attribute should not crash."""
         memo = SimpleNamespace()
         # no .scheduler, no .executor
 
-        # Should complete without raising any exception
-        shutdown_handler(memo)
+        with patch("kubetimer.close_k8s_clients"):
+            # Should complete without raising any exception
+            await shutdown_handler(memo)
 
-    def test_executor_shutdown_exception_is_caught(self, memo):
+    async def test_executor_shutdown_exception_is_caught(self, memo):
         """If executor.shutdown() raises, the error should be caught."""
         memo.executor = MagicMock()
         memo.executor.shutdown.side_effect = RuntimeError("executor failed")
 
         # Should not raise
-        shutdown_handler(memo)
+        await shutdown_handler(memo)
 
         memo.executor.shutdown.assert_called_once_with(wait=True)

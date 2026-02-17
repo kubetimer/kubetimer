@@ -4,6 +4,7 @@ Fetches all TTL-annotated Deployments via the K8s list API, schedules
 future deletions, and bulk-deletes already-expired ones.
 """
 
+import asyncio
 from time import time
 import kopf
 
@@ -128,7 +129,8 @@ async def reconcile_existing_deployments(
     timezone_str = memo.timezone
     dry_run = memo.dry_run
 
-    deployments = _fetch_ttl_deployments(
+    deployments = await asyncio.to_thread(
+        _fetch_ttl_deployments,
         annotation_key,
         memo.namespace_include,
         memo.namespace_exclude,
