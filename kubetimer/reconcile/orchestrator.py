@@ -9,7 +9,7 @@ from time import time
 import kopf
 
 from kubetimer.reconcile.bulk_delete import bulk_delete_expired
-from kubetimer.reconcile.fetcher import list_deployments_all_namespaces
+from kubetimer.reconcile.fetcher import list_deployments_all_namespaces_paginated
 from kubetimer.reconcile.models import TtlDeployment
 from kubetimer.scheduler.jobs import schedule_deletion_job
 from kubetimer.utils.logs import get_logger
@@ -21,52 +21,50 @@ logger = get_logger(__name__)
 
 def _fetch_ttl_deployments(
     annotation_key: str,
-    include_ns: list[str],
-    exclude_ns: list[str],
+    include_ns: list[str] | frozenset[str],
+    exclude_ns: list[str] | frozenset[str],
 ) -> list[TtlDeployment]:
-    """List all Deployments cluster-wide and return those with the TTL annotation.
+    """List all Deployments cluster-wide (paginated)
+    and return those with the TTL annotation.
 
     Returns:
         List of TtlDeployment instances.
         Empty list on API error.
     """
+    deployments: list[TtlDeployment] = []
     try:
-        all_deployments = list_deployments_all_namespaces()
+        for dep in list_deployments_all_namespaces_paginated():
+            annotations = dep.metadata.annotations or {}
+            ttl_value = annotations.get(annotation_key)
+            if not ttl_value:
+                continue
+
+            try:
+                ttl_datetime = parse_ttl(ttl_value)
+            except ValueError as e:
+                logger.error(
+                    "reconcile_invalid_ttl",
+                    namespace=dep.metadata.namespace or "<unknown>",
+                    name=dep.metadata.name or "<unknown>",
+                    ttl=ttl_value,
+                    error=str(e),
+                )
+                continue
+
+            ns = dep.metadata.namespace
+            if not should_scan_namespace(ns, include_ns, exclude_ns):
+                continue
+
+            deployments.append(
+                TtlDeployment(
+                    name=dep.metadata.name,
+                    namespace=ns,
+                    uid=dep.metadata.uid,
+                    ttl_value=ttl_datetime,
+                )
+            )
     except Exception as e:
         logger.error("reconcile_list_failed", error=str(e))
-        return []
-
-    deployments: list[TtlDeployment] = []
-    for dep in all_deployments.items:
-        annotations = dep.metadata.annotations or {}
-        ttl_value = annotations.get(annotation_key)
-        if not ttl_value:
-            continue
-
-        try:
-            ttl_datetime = parse_ttl(ttl_value)
-        except ValueError as e:
-            logger.error(
-                "reconcile_invalid_ttl",
-                namespace=dep.metadata.namespace or "<unknown>",
-                name=dep.metadata.name or "<unknown>",
-                ttl=ttl_value,
-                error=str(e),
-            )
-            continue
-
-        ns = dep.metadata.namespace
-        if not should_scan_namespace(ns, include_ns, exclude_ns):
-            continue
-
-        deployments.append(
-            TtlDeployment(
-                name=dep.metadata.name,
-                namespace=ns,
-                uid=dep.metadata.uid,
-                ttl_value=ttl_datetime,
-            )
-        )
 
     return deployments
 
@@ -160,6 +158,7 @@ async def reconcile_existing_deployments(
         expired_count, delete_errors = await bulk_delete_expired(
             expired,
             dry_run,
+            max_concurrent_deletes=getattr(memo, "max_concurrent_deletes", 25),
         )
         error_count += delete_errors
 

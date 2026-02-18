@@ -44,15 +44,17 @@ spec:
 
           resources:
             requests:
-              memory: "80Mi"
-              cpu: "50m"
+              memory: "128Mi"
+              cpu: "100m"
             limits:
-              memory: "200Mi"
-              cpu: "500m"
+              memory: "512Mi"
+              cpu: "1000m"
 
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8080
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5

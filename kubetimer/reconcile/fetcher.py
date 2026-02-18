@@ -5,23 +5,38 @@ and returns None / logs errors so callers don't need try/except.
 Sync functions are used by the scheduler jobs (which run in APScheduler's
 thread pool). Async variants use asyncio.to_thread for concurrent I/O
 during startup reconciliation.
+
+All API calls include ``_request_timeout`` to avoid blocking a thread
+indefinitely when the API server is slow or unresponsive.
 """
 
 import asyncio
+from typing import Generator
 
 from kubernetes.client.exceptions import ApiException
-from kubernetes.client import V1DeleteOptions
+from kubernetes.client import V1DeleteOptions, V1Deployment, V1DeploymentList
 
 from kubetimer.config.k8s import apps_v1_client
+from kubetimer.config.settings import get_settings
 from kubetimer.utils.logs import get_logger
 
 logger = get_logger(__name__)
 
+_settings = get_settings()
+_TIMEOUT = _settings.api_timeout
 
-def get_namespaced_deployment(namespace: str, name: str):
+
+def get_namespaced_deployment(
+    namespace: str,
+    name: str,
+) -> V1Deployment | None:
     apps_v1 = apps_v1_client()
     try:
-        return apps_v1.read_namespaced_deployment(name=name, namespace=namespace)
+        return apps_v1.read_namespaced_deployment(
+            name=name,
+            namespace=namespace,
+            _request_timeout=_TIMEOUT,
+        )
     except ApiException as e:
         logger.error(
             "error_fetching_deployment",
@@ -32,13 +47,17 @@ def get_namespaced_deployment(namespace: str, name: str):
         return None
 
 
-def delete_namespaced_deployment(namespace: str, name: str):
+def delete_namespaced_deployment(namespace: str, name: str) -> None:
     apps_v1 = apps_v1_client()
     try:
         apps_v1.delete_namespaced_deployment(
             name=name,
             namespace=namespace,
-            body=V1DeleteOptions(),
+            body=V1DeleteOptions(
+                propagation_policy="Background",
+                grace_period_seconds=0,
+            ),
+            _request_timeout=_TIMEOUT,
         )
     except ApiException as e:
         logger.error(
@@ -55,6 +74,45 @@ async def async_delete_namespaced_deployment(namespace: str, name: str):
     await asyncio.to_thread(delete_namespaced_deployment, namespace, name)
 
 
-def list_deployments_all_namespaces(**kwargs):
+def list_deployments_all_namespaces_paginated(
+    page_size: int | None = None,
+    **kwargs,
+) -> Generator[V1Deployment, None, None]:
+    """Yield Deployments in pages using the K8s list/continue API.
+
+    Each page fetches at most ``page_size`` items from the API server,
+    avoiding a single huge JSON response on large clusters.
+    """
     apps_v1 = apps_v1_client()
-    return apps_v1.list_deployment_for_all_namespaces(**kwargs)
+    limit = page_size or _settings.list_page_size
+    _continue: str | None = None
+    page = 0
+
+    while True:
+        page += 1
+        list_kwargs: dict = {**kwargs, "limit": limit, "_request_timeout": _TIMEOUT}
+        if _continue:
+            list_kwargs["_continue"] = _continue
+
+        try:
+            result: V1DeploymentList = apps_v1.list_deployment_for_all_namespaces(
+                **list_kwargs,
+            )
+        except ApiException as e:
+            logger.error(
+                "error_listing_deployments",
+                page=page,
+                error=str(e),
+            )
+            return
+
+        yield from result.items
+
+        _continue = result.metadata._continue
+        if not _continue:
+            logger.debug(
+                "list_pagination_complete",
+                total_pages=page,
+                page_size=limit,
+            )
+            return
