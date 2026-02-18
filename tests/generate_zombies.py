@@ -26,7 +26,6 @@ from zoneinfo import ZoneInfo
 
 from kubernetes import client, config
 
-
 # ── Constants ────────────────────────────────────────────────────────
 
 ANNOTATION_KEY = "kubetimer.io/ttl"
@@ -38,9 +37,7 @@ LABEL_VALUE = "kubetimer-zombie"
 
 
 def _random_suffix(length: int = 6) -> str:
-    return "".join(
-        random.choices(string.ascii_lowercase + string.digits, k=length)
-    )
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
 
 def _random_ttl(past_ratio: float) -> str:
@@ -54,14 +51,10 @@ def _random_ttl(past_ratio: float) -> str:
     now = datetime.now(tz)
 
     if random.random() < past_ratio:
-        delta = timedelta(
-            seconds=random.randint(1, 20 * 60)
-        )
+        delta = timedelta(seconds=random.randint(1, 900))
         dt = now - delta
     else:
-        delta = timedelta(
-            seconds=random.randint(60, 7200)
-        )
+        delta = timedelta(seconds=random.randint(60, 900))
         dt = now + delta
 
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -131,6 +124,7 @@ def run(
     namespace: str,
     past_ratio: float,
     cleanup: bool,
+    count: int | None = None,
 ):
     config.load_kube_config()
     api = client.AppsV1Api()
@@ -141,30 +135,31 @@ def run(
     past_count = 0
     future_count = 0
 
+    count_msg = f", max={count}" if count is not None else ""
     print(
         f"Generating zombie deployments in {namespace!r} "
         f"for {duration}s at ~{rate}/s  "
-        f"(past_ratio={past_ratio:.0%}) …\n"
+        f"(past_ratio={past_ratio:.0%}{count_msg}) …\n"
     )
 
     start = time.monotonic()
 
     try:
-        while (time.monotonic() - start) < duration:
+        while (time.monotonic() - start) < duration and (
+            count is None or created < count
+        ):
             name = f"zombie-{_random_suffix()}"
             ttl = _random_ttl(past_ratio)
             body = _build_deployment(name, namespace, ttl)
 
             try:
-                api.create_namespaced_deployment(
-                    namespace=namespace, body=body
-                )
+                api.create_namespaced_deployment(namespace=namespace, body=body)
                 created += 1
 
                 # Track past vs future
-                ttl_dt = datetime.strptime(
-                    ttl, "%Y-%m-%dT%H:%M:%SZ"
-                ).replace(tzinfo=timezone.utc)
+                ttl_dt = datetime.strptime(ttl, "%Y-%m-%dT%H:%M:%SZ").replace(
+                    tzinfo=timezone.utc
+                )
                 if ttl_dt <= datetime.now(timezone.utc):
                     past_count += 1
                 else:
@@ -193,9 +188,7 @@ def run(
         pass
     finally:
         wall = time.monotonic() - start
-        _print_summary(
-            wall, created, past_count, future_count, errors
-        )
+        _print_summary(wall, created, past_count, future_count, errors, count)
         if cleanup:
             _cleanup_zombies(api, namespace)
 
@@ -206,12 +199,14 @@ def _print_summary(
     past_count: int,
     future_count: int,
     errors: int,
+    count: int | None = None,
 ):
     print("\n" + "=" * 60)
     print("  KUBETIMER LOAD GENERATOR SUMMARY")
     print("=" * 60)
     print(f"\n  Wall clock         : {wall:.1f}s")
-    print(f"  Deployments created: {created}")
+    target = f" / {count}" if count is not None else ""
+    print(f"  Deployments created: {created}{target}")
     print(f"    Already expired  : {past_count}")
     print(f"    Future TTL       : {future_count}")
     if wall > 0:
@@ -249,10 +244,13 @@ if __name__ == "__main__":
         "--past-ratio",
         type=float,
         default=0.5,
-        help=(
-            "Fraction of TTLs set in the past, "
-            "0.0–1.0 (default: 0.5)"
-        ),
+        help=("Fraction of TTLs set in the past, " "0.0–1.0 (default: 0.5)"),
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=None,
+        help="Maximum number of deployments to create (default: unlimited)",
     )
     parser.add_argument(
         "--cleanup",
@@ -267,4 +265,5 @@ if __name__ == "__main__":
         args.namespace,
         args.past_ratio,
         args.cleanup,
+        args.count,
     )

@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 
 from kubernetes import client, config
 
-
 # ── Constants ────────────────────────────────────────────────────────
 
 NAMESPACE = "kubetimer-system"
@@ -60,9 +59,7 @@ class ResourceStats:
 
 
 def _find_pod(v1: client.CoreV1Api) -> str:
-    pods = v1.list_namespaced_pod(
-        NAMESPACE, label_selector=LABEL_SELECTOR
-    )
+    pods = v1.list_namespaced_pod(NAMESPACE, label_selector=LABEL_SELECTOR)
     for pod in pods.items:
         if pod.status.phase in ("Running", "Pending"):
             return pod.metadata.name
@@ -111,10 +108,7 @@ def _percentile(data: list[float], pct: float) -> float:
     c = math.ceil(k)
     if f == c:
         return sorted_data[int(k)]
-    return (
-        sorted_data[int(f)] * (c - k)
-        + sorted_data[int(c)] * (k - f)
-    )
+    return sorted_data[int(f)] * (c - k) + sorted_data[int(c)] * (k - f)
 
 
 def _ascii_chart(
@@ -153,10 +147,7 @@ def _print_summary(stats: ResourceStats, wall_seconds: float):
     print(f"  Wall clock         : {wall_seconds:.1f}s")
 
     if n == 0:
-        print(
-            "\n  No metrics collected. "
-            "Is metrics-server running?"
-        )
+        print("\n  No metrics collected. " "Is metrics-server running?")
         print("  Try: minikube addons enable metrics-server")
         print("=" * 60)
         return
@@ -248,10 +239,7 @@ def run(duration: int, interval: int):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description=(
-            "Monitor KubeTimer operator pod "
-            "CPU/memory usage."
-        ),
+        description=("Monitor KubeTimer operator pod " "CPU/memory usage."),
     )
     parser.add_argument(
         "--duration",
@@ -263,9 +251,7 @@ if __name__ == "__main__":
         "--interval",
         type=int,
         default=3,
-        help=(
-            "Seconds between metric polls (default: 3)"
-        ),
+        help=("Seconds between metric polls (default: 3)"),
     )
     args = parser.parse_args()
     run(args.duration, args.interval)

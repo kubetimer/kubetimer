@@ -15,7 +15,7 @@ def create_zombies():
         "apiVersion": "apps/v1",
         "kind": "Deployment",
         "metadata": {
-            "labels": {"app": "zombie"},
+            "labels": {"app": "kubetimer-zombie"},
             "name": "zombie-0",
             "annotations": {"kubetimer.io/ttl": "2025-01-01T00:00:00Z"},
         },

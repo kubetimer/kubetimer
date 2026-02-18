@@ -25,30 +25,17 @@ from datetime import datetime
 
 from kubernetes import client, config, watch
 
-
 # ── Constants ────────────────────────────────────────────────────────
 
 NAMESPACE = "kubetimer-system"
 LABEL_SELECTOR = "app=kubetimer-operator"
 
-EVENT_PATTERN = re.compile(
-    r"\[(\w+)\s*\]\s+([\w]+)"  # [level] event_name
-)
-DURATION_PATTERN = re.compile(
-    r"duration_seconds=([\d.]+)"
-)
-DELETED_PATTERN = re.compile(
-    r"deployment_deleted|expired_deleted=(\d+)"
-)
-RECONCILE_PATTERN = re.compile(
-    r"reconcile_complete"
-)
-TIMESTAMP_PATTERN = re.compile(
-    r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)"
-)
-KV_PATTERN = re.compile(
-    r"(\w+)=('[^']*'|\"[^\"]*\"|\S+)"
-)
+EVENT_PATTERN = re.compile(r"\[(\w+)\s*\]\s+([\w]+)")  # [level] event_name
+DURATION_PATTERN = re.compile(r"duration_seconds=([\d.]+)")
+DELETED_PATTERN = re.compile(r"deployment_deleted|expired_deleted=(\d+)")
+RECONCILE_PATTERN = re.compile(r"reconcile_complete")
+TIMESTAMP_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)")
+KV_PATTERN = re.compile(r"(\w+)=('[^']*'|\"[^\"]*\"|\S+)")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -56,9 +43,7 @@ KV_PATTERN = re.compile(
 
 def _find_pod(v1: client.CoreV1Api) -> str:
     """Return the name of the first running kubetimer-operator pod."""
-    pods = v1.list_namespaced_pod(
-        NAMESPACE, label_selector=LABEL_SELECTOR
-    )
+    pods = v1.list_namespaced_pod(NAMESPACE, label_selector=LABEL_SELECTOR)
     for pod in pods.items:
         if pod.status.phase in ("Running", "Pending"):
             return pod.metadata.name
@@ -79,9 +64,7 @@ def _parse_line(line: str, stats: dict):
     ts_str = ts_match.group(1) if ts_match else None
     if ts_str:
         try:
-            ts = datetime.fromisoformat(
-                ts_str.replace("Z", "+00:00")
-            )
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
             if stats["first_ts"] is None:
                 stats["first_ts"] = ts
             stats["last_ts"] = ts
@@ -104,14 +87,10 @@ def _parse_line(line: str, stats: dict):
     if RECONCILE_PATTERN.search(line):
         dur = DURATION_PATTERN.search(line)
         if dur:
-            stats["reconcile_durations"].append(
-                float(dur.group(1))
-            )
+            stats["reconcile_durations"].append(float(dur.group(1)))
 
     # Bulk-delete expired count
-    expired_match = re.search(
-        r"expired_deleted=(\d+)", line
-    )
+    expired_match = re.search(r"expired_deleted=(\d+)", line)
     if expired_match:
         stats["bulk_expired"] += int(expired_match.group(1))
 
@@ -161,9 +140,7 @@ def _print_summary(stats: dict, wall_seconds: float):
     print(f"  Total log lines    : {stats['total_lines']}")
 
     if stats["first_ts"] and stats["last_ts"]:
-        span = (
-            stats["last_ts"] - stats["first_ts"]
-        ).total_seconds()
+        span = (stats["last_ts"] - stats["first_ts"]).total_seconds()
         print(f"  Log time span      : {span:.1f}s")
 
     # Event counts
@@ -185,10 +162,7 @@ def _print_summary(stats: dict, wall_seconds: float):
     print(f"    Bulk (reconcile) : {stats['bulk_expired']}")
     print(f"    Total            : {total_del}")
     if wall_seconds > 0 and total_del > 0:
-        print(
-            f"    Throughput       : "
-            f"{total_del / wall_seconds:.2f} del/s"
-        )
+        print(f"    Throughput       : " f"{total_del / wall_seconds:.2f} del/s")
 
     # Reconciliation
     if stats["reconcile_durations"]:
@@ -204,8 +178,7 @@ def _print_summary(stats: dict, wall_seconds: float):
             print(f"    {ev:40s} ×{count}")
             sample = stats["error_samples"].get(ev, {})
             for k, v in sample.items():
-                if k in ("error", "message", "name",
-                         "namespace", "reason"):
+                if k in ("error", "message", "name", "namespace", "reason"):
                     print(f"      {k}={v}")
         if n_err <= 5:
             print("\n    Raw lines:")
@@ -222,8 +195,7 @@ def _print_summary(stats: dict, wall_seconds: float):
             print(f"    {ev:40s} ×{count}")
             sample = stats["warning_samples"].get(ev, {})
             for k, v in sample.items():
-                if k in ("error", "message", "name",
-                         "namespace", "reason"):
+                if k in ("error", "message", "name", "namespace", "reason"):
                     print(f"      {k}={v}")
         if n_warn <= 5:
             print("\n    Raw lines:")
@@ -243,10 +215,7 @@ def run(duration: int):
     v1 = client.CoreV1Api()
 
     pod_name = _find_pod(v1)
-    print(
-        f"Monitoring pod {pod_name!r} in "
-        f"{NAMESPACE!r} for {duration}s …"
-    )
+    print(f"Monitoring pod {pod_name!r} in " f"{NAMESPACE!r} for {duration}s …")
 
     stats = _new_stats()
     w = watch.Watch()
@@ -277,9 +246,7 @@ def run(duration: int):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Monitor KubeTimer operator pod logs."
-    )
+    parser = argparse.ArgumentParser(description="Monitor KubeTimer operator pod logs.")
     parser.add_argument(
         "--duration",
         type=int,
