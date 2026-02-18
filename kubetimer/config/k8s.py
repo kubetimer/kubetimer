@@ -16,15 +16,16 @@ logger = setup_logging()
 _connection_pool_maxsize: int = 0
 
 
-def load_k8s_config():
+def load_k8s_config(pool_size: int | None = None):
     """
     Load Kubernetes configuration.
 
     Tries in-cluster config first (for production), falls back to
     local kubeconfig (for development).
 
-    Reads the effective connection_pool_maxsize from the client
-    Configuration so other modules can align to it.
+    When *pool_size* is given the default ``Configuration`` object's
+    ``connection_pool_maxsize`` is enlarged **before** any API client
+    is created so that urllib3 honours the larger pool from the start.
     """
     global _connection_pool_maxsize
 
@@ -35,9 +36,22 @@ def load_k8s_config():
         config.load_kube_config()
         logger.info("loaded_local_kube_config")
 
-    k8s_config = client.Configuration.get_default_copy()
-    _connection_pool_maxsize = k8s_config.connection_pool_maxsize
-    logger.debug("k8s_connection_pool_maxsize", pool_size=_connection_pool_maxsize)
+    # Enlarge the connection pool if requested
+    if pool_size is not None:
+        k8s_cfg = client.Configuration.get_default()
+        k8s_cfg.connection_pool_maxsize = pool_size
+        _connection_pool_maxsize = pool_size
+        logger.info(
+            "k8s_connection_pool_maxsize_configured",
+            pool_size=pool_size,
+        )
+    else:
+        k8s_config = client.Configuration.get_default_copy()
+        _connection_pool_maxsize = k8s_config.connection_pool_maxsize
+        logger.debug(
+            "k8s_connection_pool_maxsize",
+            pool_size=_connection_pool_maxsize,
+        )
 
 
 def get_connection_pool_maxsize() -> int | None:

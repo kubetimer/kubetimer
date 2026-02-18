@@ -17,7 +17,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kubetimer.config import Settings, get_settings
 from kubetimer.config.k8s import (
     close_k8s_clients,
-    get_connection_pool_maxsize,
     load_k8s_config,
 )
 from kubetimer.handlers.deployment import (
@@ -41,11 +40,11 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
     settings.scanning.disabled = True
 
     try:
-        load_k8s_config()
+        pool_size = kubetimer_settings.connection_pool_size
+        load_k8s_config(pool_size=pool_size)
 
         loop = asyncio.get_event_loop()
 
-        pool_size = get_connection_pool_maxsize()
         executor = ThreadPoolExecutor(max_workers=pool_size)
         loop.set_default_executor(executor)
         memo.executor = executor
@@ -59,10 +58,23 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
             timezone=kubetimer_settings.timezone,
         )
 
-        scheduler = AsyncIOScheduler()
+        scheduler = AsyncIOScheduler(
+            job_defaults={
+                "misfire_grace_time": 60,
+                "max_instances": 1,
+                "coalesce": True,
+            },
+        )
         scheduler.start()
         memo.scheduler = scheduler
-        logger.info("apscheduler_started", jobstore="memory", executor="default")
+        logger.info(
+            "apscheduler_started",
+            jobstore="memory",
+            executor="AsyncIOExecutor",
+            misfire_grace_time=60,
+            max_instances=1,
+            coalesce=True,
+        )
 
         memo.reconciling_uids = set()
         memo.reconciliation_done = False
