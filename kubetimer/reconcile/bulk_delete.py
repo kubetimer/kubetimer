@@ -19,69 +19,74 @@ logger = get_logger(__name__)
 async def _delete_one(
     dep_info: TtlDeployment,
     dry_run: bool,
+    semaphore: asyncio.Semaphore,
 ) -> str:
     """Delete a single expired Deployment.
 
     Returns one of: deleted, dry_run, error.
+    Acquires the semaphore to bound concurrency.
     """
-    ns = dep_info.namespace
-    name = dep_info.name
-    ttl_value = dep_info.ttl_value
+    async with semaphore:
+        ns = dep_info.namespace
+        name = dep_info.name
+        ttl_value = dep_info.ttl_value
 
-    if dry_run:
-        logger.info(
-            "reconcile_deployment_dry_run_delete",
-            namespace=ns,
-            name=name,
-            ttl=ttl_value,
-        )
-        return "dry_run"
-
-    try:
-        await async_delete_namespaced_deployment(ns, name)
-        logger.info(
-            "reconcile_deployment_deleted",
-            namespace=ns,
-            name=name,
-            ttl=ttl_value.isoformat(),
-        )
-        return "deleted"
-    except ApiException as e:
-        if e.status == 404:
+        if dry_run:
             logger.info(
-                "reconcile_deployment_already_gone",
+                "reconcile_deployment_dry_run_delete",
                 namespace=ns,
                 name=name,
-                message="Deployment was already deleted (likely by event handler)",
+                ttl=ttl_value,
+            )
+            return "dry_run"
+
+        try:
+            await async_delete_namespaced_deployment(ns, name)
+            logger.info(
+                "reconcile_deployment_deleted",
+                namespace=ns,
+                name=name,
+                ttl=ttl_value.isoformat(),
             )
             return "deleted"
-        logger.error(
-            "reconcile_deployment_delete_failed",
-            namespace=ns,
-            name=name,
-            ttl=ttl_value,
-            error=str(e),
-        )
-        return "error"
-    except Exception as e:
-        logger.error(
-            "reconcile_deployment_delete_failed",
-            namespace=ns,
-            name=name,
-            ttl=ttl_value,
-            error=str(e),
-        )
-        return "error"
+        except ApiException as e:
+            if e.status == 404:
+                logger.info(
+                    "reconcile_deployment_already_gone",
+                    namespace=ns,
+                    name=name,
+                    message="Deployment was already deleted (likely by event handler)",
+                )
+                return "deleted"
+            logger.error(
+                "reconcile_deployment_delete_failed",
+                namespace=ns,
+                name=name,
+                ttl=ttl_value,
+                error=str(e),
+            )
+            return "error"
+        except Exception as e:
+            logger.error(
+                "reconcile_deployment_delete_failed",
+                namespace=ns,
+                name=name,
+                ttl=ttl_value,
+                error=str(e),
+            )
+            return "error"
 
 
 async def bulk_delete_expired(
     expired_deployments: list[TtlDeployment],
     dry_run: bool,
+    max_concurrent_deletes: int = 25,
 ) -> tuple[int, int]:
-    """Delete all expired Deployments concurrently.
+    """Delete all expired Deployments with bounded concurrency.
 
-    Each K8s API call is offloaded to a thread via asyncio.to_thread,
-    so all deletions execute in parallel rather than sequentially.
+    Each K8s API call is offloaded to a thread via asyncio.to_thread.
+    An asyncio.Semaphore limits parallel deletions to
+    ``max_concurrent_deletes`` to avoid connection-pool exhaustion.
 
     Returns (expired_deleted_count, error_count).
     """
@@ -89,10 +94,13 @@ async def bulk_delete_expired(
         "reconcile_deleting_expired",
         count=len(expired_deployments),
         dry_run=dry_run,
+        max_concurrent_deletes=max_concurrent_deletes,
     )
 
+    semaphore = asyncio.Semaphore(max_concurrent_deletes)
+
     results = await asyncio.gather(
-        *[_delete_one(dep, dry_run) for dep in expired_deployments],
+        *[_delete_one(dep, dry_run, semaphore) for dep in expired_deployments],
         return_exceptions=True,
     )
 

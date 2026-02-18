@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -5,7 +6,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.jobstores.base import JobLookupError
 
 from kubetimer.reconcile.fetcher import (
-    delete_namespaced_deployment,
+    async_delete_namespaced_deployment,
     get_namespaced_deployment,
 )
 from kubetimer.utils.logs import get_logger
@@ -41,7 +42,11 @@ async def delete_deployment_job(
     job_id = _make_job_id(namespace, name, uid)
 
     try:
-        deployment = get_namespaced_deployment(namespace, name)
+        deployment = await asyncio.to_thread(
+            get_namespaced_deployment,
+            namespace,
+            name,
+        )
         if not deployment:
             logger.info(
                 "deployment_already_deleted_at_execution",
@@ -106,7 +111,7 @@ async def delete_deployment_job(
                 ttl=ttl_value,
             )
         else:
-            delete_namespaced_deployment(namespace, name)
+            await async_delete_namespaced_deployment(namespace, name)
             logger.info(
                 "deployment_deleted_by_scheduler",
                 job_id=job_id,

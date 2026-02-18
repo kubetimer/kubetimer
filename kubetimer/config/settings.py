@@ -86,6 +86,54 @@ class Settings(BaseSettings):
         description="If true, log deletions without actually deleting resources",
     )
 
+    max_concurrent_deletes: int = Field(
+        default=25,
+        ge=1,
+        le=200,
+        description=(
+            "Maximum number of concurrent K8s delete calls during "
+            "startup reconciliation and bulk deletes"
+        ),
+    )
+
+    list_page_size: int = Field(
+        default=500,
+        ge=50,
+        le=5000,
+        description=(
+            "Page size for paginated K8s list API calls " "(limit parameter per page)"
+        ),
+    )
+
+    connection_pool_size: int = Field(
+        default=50,
+        ge=4,
+        le=200,
+        description=(
+            "urllib3 connection pool max size and ThreadPoolExecutor "
+            "max_workers for offloaded K8s API calls"
+        ),
+    )
+
+    api_timeout_connect: int = Field(
+        default=5,
+        ge=1,
+        le=30,
+        description="Connect timeout in seconds for K8s API calls",
+    )
+
+    api_timeout_read: int = Field(
+        default=30,
+        ge=5,
+        le=120,
+        description="Read timeout in seconds for K8s API calls",
+    )
+
+    @property
+    def api_timeout(self) -> tuple[int, int]:
+        """Return (connect, read) timeout tuple for _request_timeout."""
+        return (self.api_timeout_connect, self.api_timeout_read)
+
     def get_namespace_include_list(self) -> list[str]:
         if not self.namespace_include.strip():
             return []
