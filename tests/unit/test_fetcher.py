@@ -19,7 +19,7 @@ from kubetimer.reconcile.fetcher import (
     async_delete_namespaced_deployment,
     delete_namespaced_deployment,
     get_namespaced_deployment,
-    list_deployments_all_namespaces,
+    list_deployments_all_namespaces_paginated,
 )
 
 
@@ -43,6 +43,9 @@ class TestGetNamespacedDeployment:
         mock_apps_v1.read_namespaced_deployment.assert_called_once_with(
             name="web",
             namespace="default",
+            _request_timeout=mock_apps_v1.read_namespaced_deployment.call_args.kwargs[
+                "_request_timeout"
+            ],
         )
 
     def test_returns_none_on_api_exception(self, mock_apps_v1):
@@ -78,19 +81,33 @@ class TestAsyncDeleteNamespacedDeployment:
         mock_apps_v1.delete_namespaced_deployment.assert_called_once()
 
 
-class TestListDeploymentsAllNamespaces:
-    def test_returns_api_result(self, mock_apps_v1):
-        sentinel = object()
-        mock_apps_v1.list_deployment_for_all_namespaces.return_value = sentinel
+class TestListDeploymentsAllNamespacesPaginated:
+    def test_yields_items_from_single_page(self, mock_apps_v1):
+        """When the API returns no continue token, all items come in one page."""
+        dep1 = MagicMock()
+        dep2 = MagicMock()
+        result_page = MagicMock()
+        result_page.items = [dep1, dep2]
+        result_page.metadata._continue = None
+        mock_apps_v1.list_deployment_for_all_namespaces.return_value = result_page
 
-        result = list_deployments_all_namespaces()
+        items = list(list_deployments_all_namespaces_paginated(page_size=500))
 
-        assert result is sentinel
+        assert items == [dep1, dep2]
+        mock_apps_v1.list_deployment_for_all_namespaces.assert_called_once()
 
-    def test_forwards_kwargs(self, mock_apps_v1):
-        list_deployments_all_namespaces(label_selector="app=web", limit=100)
+    def test_paginates_with_continue_token(self, mock_apps_v1):
+        """Multiple pages are consumed until continue token is None."""
+        dep1, dep2, dep3 = MagicMock(), MagicMock(), MagicMock()
+        page1 = MagicMock()
+        page1.items = [dep1, dep2]
+        page1.metadata._continue = "token-abc"
+        page2 = MagicMock()
+        page2.items = [dep3]
+        page2.metadata._continue = None
+        mock_apps_v1.list_deployment_for_all_namespaces.side_effect = [page1, page2]
 
-        mock_apps_v1.list_deployment_for_all_namespaces.assert_called_once_with(
-            label_selector="app=web",
-            limit=100,
-        )
+        items = list(list_deployments_all_namespaces_paginated(page_size=2))
+
+        assert items == [dep1, dep2, dep3]
+        assert mock_apps_v1.list_deployment_for_all_namespaces.call_count == 2

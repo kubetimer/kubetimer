@@ -22,6 +22,7 @@ def _kopf_settings():
     s = SimpleNamespace()
     s.execution = SimpleNamespace(max_workers=None)
     s.posting = SimpleNamespace(level=None)
+    s.scanning = SimpleNamespace(disabled=False)
     return s
 
 
@@ -30,18 +31,16 @@ class TestStartupHandler:
     @patch("kubetimer.reconcile_existing_deployments", new_callable=AsyncMock)
     @patch("kubetimer.AsyncIOScheduler")
     @patch("kubetimer.configure_memo")
-    @patch("kubetimer.get_connection_pool_maxsize", return_value=10)
     @patch("kubetimer.load_k8s_config")
-    async def test_configures_thread_pool_from_k8s_pool_size(
+    async def test_configures_thread_pool_from_settings(
         self,
         mock_load,
-        mock_pool_size,
         mock_configure,
         mock_sched_cls,
         mock_reconcile,
         memo,
     ):
-        """Thread pool max_workers should match the K8s connection pool size."""
+        """Thread pool max_workers should match connection_pool_size from Settings."""
         mock_scheduler = _create_scheduler_mock()
         mock_sched_cls.return_value = mock_scheduler
 
@@ -52,19 +51,19 @@ class TestStartupHandler:
         await startup_handler(settings, memo)
 
         executor = loop._default_executor
-        assert executor._max_workers == 10
+        # connection_pool_size defaults to 50 in Settings
+        assert executor._max_workers == 50
         assert memo.executor is executor
+        mock_load.assert_called_once_with(pool_size=50)
 
     @pytest.mark.asyncio
     @patch("kubetimer.reconcile_existing_deployments", new_callable=AsyncMock)
     @patch("kubetimer.AsyncIOScheduler")
     @patch("kubetimer.configure_memo")
-    @patch("kubetimer.get_connection_pool_maxsize", return_value=4)
     @patch("kubetimer.load_k8s_config")
     async def test_starts_apscheduler_and_settings(
         self,
         mock_load,
-        mock_pool_size,
         mock_configure,
         mock_sched_cls,
         mock_reconcile,
@@ -92,8 +91,14 @@ class TestStartupHandler:
         args = mock_configure.call_args[0]
         assert args[0] is memo
 
-        mock_load.assert_called_once()
-        mock_sched_cls.assert_called_once_with()
+        mock_load.assert_called_once_with(pool_size=50)
+        mock_sched_cls.assert_called_once_with(
+            job_defaults={
+                "misfire_grace_time": 60,
+                "max_instances": 1,
+                "coalesce": True,
+            },
+        )
 
     @pytest.mark.asyncio
     @patch("kubetimer.load_k8s_config", side_effect=Exception("no cluster"))

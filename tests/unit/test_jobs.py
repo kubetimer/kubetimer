@@ -11,7 +11,7 @@ Covers:
 
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from apscheduler.jobstores.base import JobLookupError
@@ -126,7 +126,10 @@ def _mock_deployment(uid="uid-1", annotations=None):
 
 class TestDeleteDeploymentJob:
     @pytest.mark.asyncio
-    @patch("kubetimer.scheduler.jobs.delete_namespaced_deployment")
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_deletes_when_expired(self, mock_get, mock_delete):
         past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -144,10 +147,13 @@ class TestDeleteDeploymentJob:
             dry_run=False,
         )
 
-        mock_delete.assert_called_once_with("default", "web")
+        mock_delete.assert_awaited_once_with("default", "web")
 
     @pytest.mark.asyncio
-    @patch("kubetimer.scheduler.jobs.delete_namespaced_deployment")
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_dry_run_skips_delete(self, mock_get, mock_delete):
         past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -165,7 +171,7 @@ class TestDeleteDeploymentJob:
             dry_run=True,
         )
 
-        mock_delete.assert_not_called()
+        mock_delete.assert_not_awaited()
 
     @pytest.mark.asyncio
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
@@ -183,7 +189,10 @@ class TestDeleteDeploymentJob:
         )
 
     @pytest.mark.asyncio
-    @patch("kubetimer.scheduler.jobs.delete_namespaced_deployment")
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_skips_on_uid_mismatch(self, mock_get, mock_delete):
         mock_get.return_value = _mock_deployment(uid="different-uid")
@@ -197,10 +206,13 @@ class TestDeleteDeploymentJob:
             False,
         )
 
-        mock_delete.assert_not_called()
+        mock_delete.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @patch("kubetimer.scheduler.jobs.delete_namespaced_deployment")
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_skips_when_annotation_removed(self, mock_get, mock_delete):
         mock_get.return_value = _mock_deployment(uid="uid-1", annotations={})
@@ -214,10 +226,13 @@ class TestDeleteDeploymentJob:
             False,
         )
 
-        mock_delete.assert_not_called()
+        mock_delete.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @patch("kubetimer.scheduler.jobs.delete_namespaced_deployment")
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_skips_when_ttl_no_longer_expired(self, mock_get, mock_delete):
         future_ttl = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
@@ -235,10 +250,13 @@ class TestDeleteDeploymentJob:
             False,
         )
 
-        mock_delete.assert_not_called()
+        mock_delete.assert_not_awaited()
 
     @pytest.mark.asyncio
-    @patch("kubetimer.scheduler.jobs.delete_namespaced_deployment")
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_skips_on_invalid_ttl(self, mock_get, mock_delete):
         mock_get.return_value = _mock_deployment(
@@ -255,7 +273,7 @@ class TestDeleteDeploymentJob:
             False,
         )
 
-        mock_delete.assert_not_called()
+        mock_delete.assert_not_awaited()
 
     @pytest.mark.asyncio
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")

@@ -46,11 +46,13 @@ def _k8s_list(*deployments):
 
 
 class TestFetchTtlDeployments:
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     def test_returns_deployments_with_ttl(self, mock_list):
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment("web", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
-            _k8s_deployment("db", annotations={}),  # no TTL
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("web", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+                _k8s_deployment("db", annotations={}),  # no TTL
+            ]
         )
 
         result = _fetch_ttl_deployments("kubetimer.io/ttl", [], [])
@@ -58,7 +60,7 @@ class TestFetchTtlDeployments:
         assert len(result) == 1
         assert result[0].name == "web"
 
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     def test_api_error_returns_empty(self, mock_list):
         mock_list.side_effect = Exception("connection refused")
 
@@ -66,22 +68,28 @@ class TestFetchTtlDeployments:
 
         assert result == []
 
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     def test_invalid_ttl_skipped(self, mock_list):
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment("bad", annotations={"kubetimer.io/ttl": "not-a-date"}),
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("bad", annotations={"kubetimer.io/ttl": "not-a-date"}),
+            ]
         )
 
         result = _fetch_ttl_deployments("kubetimer.io/ttl", [], [])
 
         assert result == []
 
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     def test_excluded_namespace_filtered(self, mock_list):
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment(
-                "coredns", "kube-system", annotations={"kubetimer.io/ttl": FUTURE_TTL}
-            ),
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment(
+                    "coredns",
+                    "kube-system",
+                    annotations={"kubetimer.io/ttl": FUTURE_TTL},
+                ),
+            ]
         )
 
         result = _fetch_ttl_deployments(
@@ -92,11 +100,13 @@ class TestFetchTtlDeployments:
 
         assert result == []
 
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     def test_no_annotations_field(self, mock_list):
         """Deployment with metadata.annotations = None should be skipped."""
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment("bare", annotations=None),
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("bare", annotations=None),
+            ]
         )
 
         result = _fetch_ttl_deployments("kubetimer.io/ttl", [], [])
@@ -165,9 +175,9 @@ class TestReconcileExistingDeployments:
         await reconcile_existing_deployments(memo)
 
     @pytest.mark.asyncio
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     async def test_no_ttl_deployments_returns_early(self, mock_list, memo):
-        mock_list.return_value = _k8s_list()  # empty
+        mock_list.return_value = iter([])  # empty
 
         await reconcile_existing_deployments(memo)
 
@@ -177,11 +187,13 @@ class TestReconcileExistingDeployments:
     @patch(
         "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
     )
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     async def test_all_expired_deletes_all(self, mock_list, mock_bulk, memo):
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment("old-1", annotations={"kubetimer.io/ttl": PAST_TTL}),
-            _k8s_deployment("old-2", annotations={"kubetimer.io/ttl": PAST_TTL}),
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("old-1", annotations={"kubetimer.io/ttl": PAST_TTL}),
+                _k8s_deployment("old-2", annotations={"kubetimer.io/ttl": PAST_TTL}),
+            ]
         )
         mock_bulk.return_value = (2, 0)
 
@@ -195,20 +207,22 @@ class TestReconcileExistingDeployments:
     @patch(
         "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
     )
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     async def test_expired_uids_added_to_reconciling_set(
         self, mock_list, mock_bulk, memo
     ):
         """Expired UIDs should be registered in reconciling_uids before deletion."""
         captured_uids = set()
 
-        async def capture_uids(deps, dry_run):
+        async def capture_uids(deps, dry_run, **kw):
             captured_uids.update(memo.reconciling_uids)
             return (len(deps), 0)
 
         mock_bulk.side_effect = capture_uids
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment("old-1", annotations={"kubetimer.io/ttl": PAST_TTL}),
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("old-1", annotations={"kubetimer.io/ttl": PAST_TTL}),
+            ]
         )
 
         await reconcile_existing_deployments(memo)
@@ -220,12 +234,14 @@ class TestReconcileExistingDeployments:
         "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
     )
     @patch("kubetimer.reconcile.orchestrator.schedule_deletion_job")
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     async def test_all_future_schedules_all(
         self, mock_list, mock_schedule, mock_bulk, memo
     ):
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment("new-1", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("new-1", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+            ]
         )
         mock_schedule.return_value = True
 
@@ -239,13 +255,15 @@ class TestReconcileExistingDeployments:
         "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
     )
     @patch("kubetimer.reconcile.orchestrator.schedule_deletion_job")
-    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
     async def test_mixed_expired_and_future(
         self, mock_list, mock_schedule, mock_bulk, memo
     ):
-        mock_list.return_value = _k8s_list(
-            _k8s_deployment("old", annotations={"kubetimer.io/ttl": PAST_TTL}),
-            _k8s_deployment("new", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("old", annotations={"kubetimer.io/ttl": PAST_TTL}),
+                _k8s_deployment("new", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+            ]
         )
         mock_schedule.return_value = True
         mock_bulk.return_value = (1, 0)

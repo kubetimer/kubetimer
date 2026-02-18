@@ -63,8 +63,9 @@ def memo():
     m.annotation_key = "kubetimer.io/ttl"
     m.dry_run = False
     m.timezone = "UTC"
-    m.namespace_include = []
-    m.namespace_exclude = ["kube-system", "kube-public", "kube-node-lease"]
+    m.namespace_include = frozenset()
+    m.namespace_exclude = frozenset({"kube-system", "kube-public", "kube-node-lease"})
+    m.max_concurrent_deletes = 25
     m.config_loaded = True
     m.scheduler = _create_scheduler_mock(running=True)
     m.reconciling_uids = set()

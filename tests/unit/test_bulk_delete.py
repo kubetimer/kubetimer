@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from asyncio import Semaphore
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -6,6 +7,8 @@ from kubernetes.client.exceptions import ApiException
 
 from kubetimer.reconcile.bulk_delete import _delete_one, bulk_delete_expired
 from kubetimer.reconcile.models import TtlDeployment
+
+_SEM = Semaphore(100)  # high limit — tests don't need real concurrency gating
 
 
 def _dep(name: str = "test-dep", namespace: str = "default") -> TtlDeployment:
@@ -24,13 +27,13 @@ class TestDeleteOne:
         new_callable=AsyncMock,
     )
     async def test_successful_delete(self, mock_delete):
-        result = await _delete_one(_dep(), dry_run=False)
+        result = await _delete_one(_dep(), dry_run=False, semaphore=_SEM)
         assert result == "deleted"
         mock_delete.assert_awaited_once_with("default", "test-dep")
 
     @pytest.mark.asyncio
     async def test_dry_run_skips_api_call(self):
-        result = await _delete_one(_dep(), dry_run=True)
+        result = await _delete_one(_dep(), dry_run=True, semaphore=_SEM)
         assert result == "dry_run"
 
     @pytest.mark.asyncio
@@ -40,7 +43,7 @@ class TestDeleteOne:
     )
     async def test_api_error_returns_error(self, mock_delete):
         mock_delete.side_effect = Exception("API 503")
-        result = await _delete_one(_dep(), dry_run=False)
+        result = await _delete_one(_dep(), dry_run=False, semaphore=_SEM)
         assert result == "error"
 
     @pytest.mark.asyncio
@@ -51,7 +54,7 @@ class TestDeleteOne:
     async def test_404_treated_as_already_deleted(self, mock_delete):
         """A 404 means the deployment was already gone (race with event handler)."""
         mock_delete.side_effect = ApiException(status=404, reason="Not Found")
-        result = await _delete_one(_dep(), dry_run=False)
+        result = await _delete_one(_dep(), dry_run=False, semaphore=_SEM)
         assert result == "deleted"
 
 

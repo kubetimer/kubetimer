@@ -24,8 +24,9 @@ class TestConfigureMemo:
         assert memo.annotation_key == "kubetimer.io/ttl"
         assert memo.dry_run is True
         assert memo.timezone == "America/Chicago"
-        assert memo.namespace_include == ["staging", "prod"]
-        assert memo.namespace_exclude == ["kube-system"]
+        assert memo.namespace_include == frozenset({"staging", "prod"})
+        assert memo.namespace_exclude == frozenset({"kube-system"})
+        assert memo.max_concurrent_deletes == 25
         assert memo.config_loaded is True
 
     def test_defaults_produce_expected_memo(self, monkeypatch):
@@ -45,9 +46,11 @@ class TestConfigureMemo:
 
         assert memo.dry_run is False
         assert memo.timezone == "UTC"
-        assert memo.namespace_include == []
-        assert memo.namespace_exclude == [
-            "kube-system",
-            "kube-public",
-            "kube-node-lease",
-        ]
+        assert memo.namespace_include == frozenset()
+        assert memo.namespace_exclude == frozenset(
+            {
+                "kube-system",
+                "kube-public",
+                "kube-node-lease",
+            }
+        )
