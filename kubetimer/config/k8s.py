@@ -38,8 +38,9 @@ def load_k8s_config(pool_size: int | None = None):
 
     # Enlarge the connection pool if requested
     if pool_size is not None:
-        k8s_cfg = client.Configuration.get_default()
+        k8s_cfg = client.Configuration.get_default_copy()
         k8s_cfg.connection_pool_maxsize = pool_size
+        client.Configuration.set_default(k8s_cfg)
         _connection_pool_maxsize = pool_size
         logger.info(
             "k8s_connection_pool_maxsize_configured",

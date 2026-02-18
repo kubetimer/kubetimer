@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     )
 
     list_page_size: int = Field(
-        default=500,
+        default=1000,
         ge=50,
         le=5000,
         description=(
