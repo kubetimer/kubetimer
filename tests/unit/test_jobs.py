@@ -289,3 +289,137 @@ class TestDeleteDeploymentJob:
             "UTC",
             False,
         )
+
+    @pytest.mark.asyncio
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
+    @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
+    async def test_discards_uid_from_reconciling_uids_on_success(
+        self, mock_get, mock_delete
+    ):
+        """UID should be removed from reconciling_uids when job completes."""
+        past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        mock_get.return_value = _mock_deployment(
+            uid="uid-1",
+            annotations={"kubetimer.io/ttl": past_ttl},
+        )
+        uids = {"uid-1", "uid-other"}
+
+        await delete_deployment_job(
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            dry_run=False,
+            reconciling_uids=uids,
+        )
+
+        assert "uid-1" not in uids
+        assert "uid-other" in uids
+
+    @pytest.mark.asyncio
+    @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
+    async def test_discards_uid_from_reconciling_uids_on_error(self, mock_get):
+        """UID should be removed from reconciling_uids even when job fails."""
+        mock_get.side_effect = RuntimeError("connection reset")
+        uids = {"uid-1"}
+
+        await delete_deployment_job(
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
+            reconciling_uids=uids,
+        )
+
+        assert "uid-1" not in uids
+
+    @pytest.mark.asyncio
+    @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
+    async def test_discards_uid_from_reconciling_uids_on_early_return(self, mock_get):
+        """UID should be removed even when deployment is already gone."""
+        mock_get.return_value = None
+        uids = {"uid-1"}
+
+        await delete_deployment_job(
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
+            reconciling_uids=uids,
+        )
+
+        assert "uid-1" not in uids
+
+    @pytest.mark.asyncio
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
+    @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
+    async def test_no_error_when_reconciling_uids_is_none(
+        self, mock_get, mock_delete
+    ):
+        """No error when reconciling_uids is not provided (normal event path)."""
+        past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        mock_get.return_value = _mock_deployment(
+            uid="uid-1",
+            annotations={"kubetimer.io/ttl": past_ttl},
+        )
+
+        # Should not raise — reconciling_uids defaults to None
+        await delete_deployment_job(
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            dry_run=False,
+        )
+
+
+class TestScheduleDeletionJobReconcilingUids:
+    """Tests for reconciling_uids forwarding in schedule_deletion_job."""
+
+    def test_forwards_reconciling_uids_in_kwargs(self):
+        scheduler = _create_scheduler_mock()
+        uids = {"uid-1", "uid-2"}
+
+        schedule_deletion_job(
+            scheduler,
+            "default",
+            "web",
+            "uid-1",
+            FUTURE,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
+            reconciling_uids=uids,
+        )
+
+        _, call_kwargs = scheduler.add_job.call_args
+        assert call_kwargs["kwargs"]["reconciling_uids"] is uids
+
+    def test_omits_reconciling_uids_when_none(self):
+        scheduler = _create_scheduler_mock()
+
+        schedule_deletion_job(
+            scheduler,
+            "default",
+            "web",
+            "uid-1",
+            FUTURE,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
+        )
+
+        _, call_kwargs = scheduler.add_job.call_args
+        assert "reconciling_uids" not in call_kwargs["kwargs"]

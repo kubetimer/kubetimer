@@ -75,6 +75,7 @@ def _triage_deployments(
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
+    reconciling_uids: set[str] | None = None,
 ) -> tuple[list[TtlDeployment], int, int]:
     """Classify deployments into expired (immediate delete) vs future (schedule).
 
@@ -98,6 +99,7 @@ def _triage_deployments(
                 annotation_key,
                 timezone_str,
                 dry_run,
+                reconciling_uids=reconciling_uids,
             ):
                 scheduled_count += 1
             else:
@@ -142,25 +144,29 @@ async def reconcile_existing_deployments(
         total_with_ttl=len(deployments),
     )
 
+    reconciling_uids: set[str] = getattr(memo, "reconciling_uids", set())
+    reconciling_uids.update(dep.uid for dep in deployments)
+
     expired, scheduled_count, error_count = _triage_deployments(
         deployments,
         scheduler,
         annotation_key,
         timezone_str,
         dry_run,
+        reconciling_uids=reconciling_uids,
     )
 
     expired_count = 0
     if expired:
-        reconciling_uids: set[str] = getattr(memo, "reconciling_uids", set())
-        reconciling_uids.update(dep.uid for dep in expired)
-
         expired_count, delete_errors = await bulk_delete_expired(
             expired,
             dry_run,
             max_concurrent_deletes=getattr(memo, "max_concurrent_deletes", 25),
         )
         error_count += delete_errors
+
+    for dep in expired:
+        reconciling_uids.discard(dep.uid)
 
     logger.info(
         "reconcile_complete",

@@ -31,6 +31,7 @@ async def delete_deployment_job(
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
+    reconciling_uids: set[str] | None = None,
 ) -> None:
     """
     Execute the actual deletion of a Deployment (called by APScheduler).
@@ -129,6 +130,9 @@ async def delete_deployment_job(
             error=str(e),
             error_type=type(e).__name__,
         )
+    finally:
+        if reconciling_uids is not None:
+            reconciling_uids.discard(uid)
 
 
 def schedule_deletion_job(
@@ -140,6 +144,7 @@ def schedule_deletion_job(
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
+    reconciling_uids: set[str] | None = None,
 ) -> bool:
     """
     Schedule a deletion job at TTL expiry time.
@@ -149,6 +154,10 @@ def schedule_deletion_job(
     correct behavior for both startup reconciliation and deployments
     created with an already-expired TTL.
 
+    If *reconciling_uids* is provided (during startup reconciliation),
+    the reference is forwarded to ``delete_deployment_job`` so the UID
+    is removed from the set once the job completes.
+
     Returns:
         True if job was scheduled, False on error.
     """
@@ -156,20 +165,24 @@ def schedule_deletion_job(
     now = datetime.now(ttl_datetime.tzinfo)
 
     try:
+        job_kwargs: dict = {
+            "namespace": namespace,
+            "name": name,
+            "uid": uid,
+            "annotation_key": annotation_key,
+            "timezone_str": timezone_str,
+            "dry_run": dry_run,
+        }
+        if reconciling_uids is not None:
+            job_kwargs["reconciling_uids"] = reconciling_uids
+
         scheduler.add_job(
             delete_deployment_job,
             trigger=DateTrigger(run_date=ttl_datetime),
             id=job_id,
             name=f"Delete {namespace}/{name}",
             replace_existing=True,
-            kwargs={
-                "namespace": namespace,
-                "name": name,
-                "uid": uid,
-                "annotation_key": annotation_key,
-                "timezone_str": timezone_str,
-                "dry_run": dry_run,
-            },
+            kwargs=job_kwargs,
         )
 
         logger.info(

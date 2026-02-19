@@ -228,6 +228,54 @@ class TestReconcileExistingDeployments:
         await reconcile_existing_deployments(memo)
 
         assert "uid-old-1" in captured_uids
+        # After bulk delete completes, expired UIDs are removed
+        assert "uid-old-1" not in memo.reconciling_uids
+
+    @pytest.mark.asyncio
+    @patch(
+        "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
+    )
+    @patch("kubetimer.reconcile.orchestrator.schedule_deletion_job")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
+    async def test_scheduled_uids_remain_in_reconciling_set(
+        self, mock_list, mock_schedule, mock_bulk, memo
+    ):
+        """Scheduled (future) UIDs remain in reconciling_uids after reconcile."""
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("new-1", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+            ]
+        )
+        mock_schedule.return_value = True
+
+        await reconcile_existing_deployments(memo)
+
+        # Future UIDs stay in the set — cleaned up by delete_deployment_job
+        assert "uid-new-1" in memo.reconciling_uids
+
+    @pytest.mark.asyncio
+    @patch(
+        "kubetimer.reconcile.orchestrator.bulk_delete_expired", new_callable=AsyncMock
+    )
+    @patch("kubetimer.reconcile.orchestrator.schedule_deletion_job")
+    @patch("kubetimer.reconcile.orchestrator.list_deployments_all_namespaces_paginated")
+    async def test_mixed_only_expired_uids_removed(
+        self, mock_list, mock_schedule, mock_bulk, memo
+    ):
+        """With mixed deployments, only expired UIDs are removed after reconcile."""
+        mock_list.return_value = iter(
+            [
+                _k8s_deployment("old", annotations={"kubetimer.io/ttl": PAST_TTL}),
+                _k8s_deployment("new", annotations={"kubetimer.io/ttl": FUTURE_TTL}),
+            ]
+        )
+        mock_schedule.return_value = True
+        mock_bulk.return_value = (1, 0)
+
+        await reconcile_existing_deployments(memo)
+
+        assert "uid-old" not in memo.reconciling_uids
+        assert "uid-new" in memo.reconciling_uids
 
     @pytest.mark.asyncio
     @patch(
