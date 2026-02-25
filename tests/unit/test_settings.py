@@ -7,7 +7,7 @@ to avoid cross-test pollution.
 
 import pytest
 
-from kubetimer.config.settings import Settings
+from kubetimer.config.settings import Settings, _validate_prefix, _validate_name
 
 
 class TestSettings:
@@ -56,3 +56,69 @@ class TestSettings:
         monkeypatch.setenv("KUBETIMER_TIMEZONE", "Not/A_Timezone")
         with pytest.raises(Exception, match="Invalid timezone"):
             Settings(_env_file=None)
+
+    def test_validate_prefix_passing(self):
+        prefix = "validprefix.io"
+        assert _validate_prefix(prefix)
+
+    def test_validate_prefix_invalid_size(self):
+        max_length = 253
+        prefix = "a" * (max_length + 1)
+        assert not _validate_prefix(prefix)
+
+    def test_validate_prefix_invalid_characters(self):
+        prefix = "invalid_prefix!"
+        assert not _validate_prefix(prefix)
+
+    def test_validate_prefix_empty(self):
+        prefix = ""
+        assert not _validate_prefix(prefix)
+
+    def test_validate_name_valid(self):
+        assert _validate_name("valid-name_123")
+
+    def test_validate_name_too_long(self):
+        max_length = 63
+        long_name = "a" * (max_length + 1)
+        assert not _validate_name(long_name)
+    
+    def test_validate_name_invalid_start_end(self):
+        assert not _validate_name("-invalid")
+        assert not _validate_name("invalid-")
+        assert not _validate_name(".invalid")
+        assert not _validate_name("invalid.")
+        assert not _validate_name("_invalid")
+        assert not _validate_name("invalid_")
+
+    def test_validate_name_invalid_characters(self):
+        assert not _validate_name("invalid name!")
+    
+    def test_validate_name_empty(self):
+        assert not _validate_name("")
+
+    def test_settings_validate_annotation_key_invalid_prefix(self, monkeypatch):
+        monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", ".invalidPrefix/annotation")
+        with pytest.raises(
+            Exception,
+            match=r"Invalid annotation key prefix: '\.invalidPrefix'\.",
+        ):
+            Settings(_env_file=None)
+
+    def test_settings_validate_annotation_key_invalid_name(self, monkeypatch):
+        monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", "validprefix/InvalidName!")
+        with pytest.raises(
+            Exception,
+            match=r"Invalid annotation key prefix: 'validprefix'\.",
+        ):
+            Settings(_env_file=None)
+
+    def test_settings_validate_annotation_key_empty(self, monkeypatch):
+        monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", "")
+        errormsg = "Annotation key cannot be empty."
+        with pytest.raises(Exception, match=errormsg):
+            Settings(_env_file=None)
+
+    def test_settings_validate_annotation_key_valid(self, monkeypatch):
+        monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", "validprefix/valid-name_123")
+        s = Settings(_env_file=None)
+        assert s.annotation_key == "validprefix/valid-name_123"

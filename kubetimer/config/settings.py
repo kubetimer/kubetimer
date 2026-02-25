@@ -19,14 +19,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _validate_prefix(prefix: str) -> bool:
-    return len(prefix) <= 253 and all(
+    return (len(prefix) > 0 and len(prefix) <= 253
+        and prefix[0].isalnum()
+        and prefix[-1].isalnum() 
+        and all(
         c.isalnum() or c in "-." for c in prefix.split(".")
-    )
+    ))
 
 
 def _validate_name(name: str) -> bool:
     return (
-        len(name) <= 63
+        len(name) > 0 and len(name) <= 63
         and name[0].isalnum()
         and name[-1].isalnum()
         and all(c.isalnum() or c in "-._" for c in name)
@@ -175,7 +178,7 @@ class Settings(BaseSettings):
             return v
         elif len(splitted) == 2:
             prefix, name = splitted
-            if prefix and not _validate_prefix(prefix) and not _validate_name(prefix):
+            if not prefix or not _validate_prefix(prefix) or not _validate_name(name):
                 raise ValueError(
                     f"Invalid annotation key prefix:"
                     f" {prefix!r}. Must be a valid DNS"
