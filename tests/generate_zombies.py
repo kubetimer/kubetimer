@@ -50,14 +50,17 @@ def _random_ttl(past_ratio: float) -> str:
     tz = ZoneInfo("America/Sao_Paulo")
     now = datetime.now(tz)
 
-    if random.random() < past_ratio:
-        delta = timedelta(seconds=random.randint(1, 900))
+    randomnumber = random.random()
+    print(f"Random number: {randomnumber:.4f} (past_ratio={past_ratio:.2f})")
+
+    if randomnumber < past_ratio:
+        delta = timedelta(seconds=random.randint(1, 300))
         dt = now - delta
     else:
-        delta = timedelta(seconds=random.randint(60, 900))
+        delta = timedelta(seconds=random.randint(60, 90))
         dt = now + delta
 
-    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.isoformat()
 
 
 def _build_deployment(name: str, namespace: str, ttl: str) -> dict:
@@ -157,9 +160,7 @@ def run(
                 created += 1
 
                 # Track past vs future
-                ttl_dt = datetime.strptime(ttl, "%Y-%m-%dT%H:%M:%SZ").replace(
-                    tzinfo=timezone.utc
-                )
+                ttl_dt = datetime.fromisoformat(ttl).replace(tzinfo=timezone.utc)
                 if ttl_dt <= datetime.now(timezone.utc):
                     past_count += 1
                 else:
