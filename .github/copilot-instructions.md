@@ -42,7 +42,7 @@ Startup: list API (paginated) → reconcile orchestrator → bulk_delete / sched
 uv sync                        # install deps
 make install                   # editable install (uv pip install -e .)
 python kubetimer/main.py       # run locally (needs kubeconfig)
-./deploy.sh                    # deploy to cluster (namespace, CRD, RBAC, Deployment)
+./deploy.sh                    # deploy to cluster (namespace, RBAC, Deployment)
 make test                      # run unit tests (uv run --group dev pytest)
 make coverage                  # pytest with coverage report
 make check                     # format-check + lint + typecheck + test

@@ -81,7 +81,7 @@ class TestSettings:
         max_length = 63
         long_name = "a" * (max_length + 1)
         assert not _validate_name(long_name)
-    
+
     def test_validate_name_invalid_start_end(self):
         assert not _validate_name("-invalid")
         assert not _validate_name("invalid-")
@@ -92,7 +92,7 @@ class TestSettings:
 
     def test_validate_name_invalid_characters(self):
         assert not _validate_name("invalid name!")
-    
+
     def test_validate_name_empty(self):
         assert not _validate_name("")
 
