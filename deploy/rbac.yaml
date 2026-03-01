@@ -1,6 +1,6 @@
 ---
 # RBAC for KubeTimer Operator
-# This gives the operator permission to watch CRDs and manage Deployments
+# This gives the operator permission to watch and manage Deployments
 
 # ServiceAccount - Identity for the operator pod
 apiVersion: v1

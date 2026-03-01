@@ -364,9 +364,7 @@ class TestDeleteDeploymentJob:
         new_callable=AsyncMock,
     )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
-    async def test_no_error_when_reconciling_uids_is_none(
-        self, mock_get, mock_delete
-    ):
+    async def test_no_error_when_reconciling_uids_is_none(self, mock_get, mock_delete):
         """No error when reconciling_uids is not provided (normal event path)."""
         past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         mock_get.return_value = _mock_deployment(

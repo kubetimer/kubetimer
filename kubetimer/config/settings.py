@@ -19,17 +19,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _validate_prefix(prefix: str) -> bool:
-    return (len(prefix) > 0 and len(prefix) <= 253
+    return (
+        len(prefix) > 0
+        and len(prefix) <= 253
         and prefix[0].isalnum()
-        and prefix[-1].isalnum() 
-        and all(
-        c.isalnum() or c in "-." for c in prefix.split(".")
-    ))
+        and prefix[-1].isalnum()
+        and all(c.isalnum() or c in "-." for c in prefix.split("."))
+    )
 
 
 def _validate_name(name: str) -> bool:
     return (
-        len(name) > 0 and len(name) <= 63
+        len(name) > 0
+        and len(name) <= 63
         and name[0].isalnum()
         and name[-1].isalnum()
         and all(c.isalnum() or c in "-._" for c in name)
