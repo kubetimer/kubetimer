@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: 
+        - main
+        - v*
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  CI:
+    runs-on: ubuntu-latest
+    name: Tests and Checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Format check (Black)
+        run: make format-check
+
+      - name: Lint (Flake8)
+        run: make lint
+
+      - name: Type check (Mypy)
+        run: make typecheck
+
+      - name: Tests with coverage
+        run: make coverage

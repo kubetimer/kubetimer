@@ -1,148 +1,184 @@
-"""
-Deployment handler for KubeTimer operator.
+"""Kopf event handlers for Deployment TTL lifecycle.
 
-Contains Kopf handlers for managing Deployment lifecycle based on TTL.
+Thin adapter layer: unpacks Kopf arguments, validates, and delegates
+to scheduler.jobs for scheduling/cancelling APScheduler jobs.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
 import kopf
-from kubernetes import client
 
+from kubetimer.reconcile.fetcher import async_delete_namespaced_deployment
+from kubetimer.scheduler.jobs import cancel_deletion_job, schedule_deletion_job
 from kubetimer.utils.logs import get_logger
+from kubetimer.utils.namespace import should_scan_namespace
 from kubetimer.utils.time_utils import is_ttl_expired, parse_ttl
 
 logger = get_logger(__name__)
 
 
-def deployment_indexer(
+async def on_deployment_created_with_ttl(
+    namespace: str,
     name: str,
-    namespace: str,
-    meta: kopf.Meta,
+    uid: str,
+    annotations: Dict[str, str],
     memo: kopf.Memo,
-    **_
-) -> Optional[Dict[str, Any]]:
-    annotations = meta.get('annotations', {})
-    date = annotations.get(memo.annotation_key, '')
+    **kwargs,
+) -> None:
+    """Handle creation of a Deployment that already carries a TTL annotation."""
+    logger.info("handling_deployment_creation", namespace=namespace, name=name, uid=uid)
 
-    if not date:
-        return None
-    
-    return {
-        name: {
-            'namespace': namespace,
-            memo.annotation_key: date
-        }
-    }
+    reconciling_uids: set = getattr(memo, "reconciling_uids", set())
+    if uid in reconciling_uids:
+        logger.debug(
+            "skipping_create_during_reconciliation",
+            namespace=namespace,
+            name=name,
+            uid=uid,
+        )
+        return
 
+    if not should_scan_namespace(
+        namespace, memo.namespace_include, memo.namespace_exclude
+    ):
+        logger.debug("namespace_filtered_on_create", namespace=namespace, name=name)
+        return
 
-def should_scan_namespace(
-    namespace: str,
-    include_namespaces: List[str],
-    exclude_namespaces: List[str]
-) -> bool:
-    if namespace in exclude_namespaces:
-        return False
+    ttl_value = annotations.get(memo.annotation_key)
+    if not ttl_value:
+        return
 
-    if not include_namespaces:
-        return True
+    try:
+        ttl_datetime = parse_ttl(ttl_value)
+    except ValueError as e:
+        logger.error(
+            "invalid_ttl_on_create",
+            namespace=namespace,
+            name=name,
+            ttl=ttl_value,
+            error=str(e),
+        )
+        return
 
-    return namespace in include_namespaces
-
-
-def deployment_handler(
-    apps_v1: client.AppsV1Api,
-    deployment_index: kopf.Index,
-    include_namespaces: List[str],
-    exclude_namespaces: List[str],
-    annotation_key: str,
-    dry_run: bool,
-    timezone_str: str = "UTC"
-) -> int:
-
-    logger.debug(
-        "scanning_deployments_from_index",
-        total_indexed=len(deployment_index),
-        include_namespaces=include_namespaces or "all",
-        exclude_namespaces=exclude_namespaces
-    )
-
-    deleted_count = 0
-    scanned_count = 0
-
-
-    deployments_snapshot = []
-    for name, store in deployment_index.items():
-        for value in store:
-            deployments_snapshot.append({
-                'name': name,
-                'namespace': value['namespace'],
-                annotation_key: value.get(annotation_key)
-            })
-
-    logger.debug("deployment_snapshot", count=len(deployments_snapshot))
-
-    for deployment_info in deployments_snapshot:
-        name = deployment_info['name']
-        ns = deployment_info['namespace']
-
-        logger.debug("checking_deployment", deployment=name, namespace=ns)
-
-        if not should_scan_namespace(ns, include_namespaces, exclude_namespaces):
-            continue
-        
-        scanned_count += 1
-
-        ttl_value = deployment_info.get(annotation_key)
-
-        try:
-            ttl_datetime = parse_ttl(ttl_value)
-
-            if is_ttl_expired(ttl_datetime, timezone_str):
-                logger.debug(
-                    "deployment_expired",
-                    name=name,
-                    namespace=ns,
-                    ttl=ttl_value,
-                    dry_run=dry_run
-                )
-                
-                if not dry_run:
-                    apps_v1.delete_namespaced_deployment(
-                        name=name,
-                        namespace=ns,
-                        body=client.V1DeleteOptions()
-                    )
-                    logger.info("deployment_deleted", name=name, namespace=ns)
-                
-                deleted_count += 1
-        
-        except ValueError as e:
-            logger.error(
-                "invalid_ttl_format",
+    if is_ttl_expired(ttl_datetime, memo.timezone):
+        logger.info(
+            "ttl_already_expired_on_create",
+            namespace=namespace,
+            name=name,
+            ttl=ttl_value,
+        )
+        if getattr(memo, "dry_run", False):
+            logger.info(
+                "dry_run_skip_immediate_delete_on_create",
+                namespace=namespace,
                 name=name,
-                namespace=ns,
                 ttl=ttl_value,
-                error=str(e)
             )
-        except client.ApiException as e:
-            if e.status == 404:
-                logger.error(
-                    "deployment_was_already_deleted",
-                    name=name,
-                    namespace=ns)
-            else:
-                logger.error(
-                    "api_exception",
-                    name=name,
-                    namespace=ns,
-                    error=str(e)
-                )
-    
+            return
+        await async_delete_namespaced_deployment(namespace, name)
+        return
+
+    else:
+        logger.info(
+            "scheduling_due_to_ttl_on_create",
+            namespace=namespace,
+            name=name,
+            ttl=ttl_value,
+        )
+        schedule_deletion_job(
+            memo.scheduler,
+            namespace,
+            name,
+            uid,
+            ttl_datetime,
+            memo.annotation_key,
+            memo.timezone,
+            memo.dry_run,
+        )
+
+
+def on_ttl_annotation_changed(
+    namespace: str,
+    name: str,
+    uid: str,
+    old: Optional[str],
+    new: Optional[str],
+    memo: kopf.Memo,
+    **_,
+) -> None:
+    """Handle changes to the TTL annotation field."""
     logger.info(
-        "deployment_scan_complete",
-        scanned_deployments=scanned_count,
-        deleted_count=deleted_count,
-        dry_run=dry_run
+        "handling_ttl_annotation_change", namespace=namespace, name=name, uid=uid
     )
-    return deleted_count
+
+    reconciling_uids: set = getattr(memo, "reconciling_uids", set())
+    if uid in reconciling_uids:
+        logger.debug(
+            "skipping_update_during_reconciliation",
+            namespace=namespace,
+            name=name,
+            uid=uid,
+        )
+        return
+
+    if not should_scan_namespace(
+        namespace, memo.namespace_include, memo.namespace_exclude
+    ):
+        logger.debug("namespace_filtered_on_ttl_change", namespace=namespace, name=name)
+        cancel_deletion_job(memo.scheduler, namespace, name, uid)
+        return
+
+    if new is None:
+        logger.info(
+            "ttl_annotation_removed", namespace=namespace, name=name, old_ttl=old
+        )
+        cancel_deletion_job(memo.scheduler, namespace, name, uid)
+        return
+
+    try:
+        ttl_datetime = parse_ttl(new)
+    except ValueError as e:
+        logger.error(
+            "invalid_ttl_on_change",
+            namespace=namespace,
+            name=name,
+            new_ttl=new,
+            error=str(e),
+        )
+        cancel_deletion_job(memo.scheduler, namespace, name, uid)
+        return
+
+    logger.info(
+        "rescheduling_due_to_ttl_change",
+        namespace=namespace,
+        name=name,
+        old_ttl=old,
+        new_ttl=new,
+    )
+    schedule_deletion_job(
+        memo.scheduler,
+        namespace,
+        name,
+        uid,
+        ttl_datetime,
+        memo.annotation_key,
+        memo.timezone,
+        memo.dry_run,
+    )
+
+
+def on_deployment_deleted_with_ttl(
+    namespace: str, name: str, uid: str, memo: kopf.Memo, **_
+) -> None:
+    """
+    Handle deletion of Deployments that had a TTL annotation.
+    Cancels any scheduled deletion jobs since the resource is already gone.
+    """
+    logger.info("handling_deployment_deletion", namespace=namespace, name=name, uid=uid)
+    if not hasattr(memo, "scheduler"):
+        return
+
+    logger.info(
+        "deployment_deleted_cancelling_job", namespace=namespace, name=name, uid=uid
+    )
+    cancel_deletion_job(memo.scheduler, namespace, name, uid)

@@ -22,29 +22,39 @@ spec:
       serviceAccountName: kubetimer-operator
       containers:
         - name: operator
-          image: ryanjorgeac/kubetimer:v0.0.3-log
+          image: ryanjorgeac/kubetimer:v0.2.2-log
           imagePullPolicy: Always
           env:
-            - name: KUBETIMER_CHECK_INTERVAL
-              value: "60"
             - name: KUBETIMER_LOG_LEVEL
               value: "INFO"
-            - name: KUBETIMER_KOPF_LOG_LEVEL
-              value: "WARNING"
             - name: KUBETIMER_LOG_FORMAT
               value: "text"
-          
+            - name: KUBETIMER_KOPF_LOG_LEVEL
+              value: "WARNING"
+            - name: KUBETIMER_ANNOTATION_KEY
+              value: "kubetimer.io/ttl"
+            - name: KUBETIMER_NAMESPACE_EXCLUDE
+              value: "kube-system,kube-public,kube-node-lease"
+            - name: KUBETIMER_NAMESPACE_INCLUDE
+              value: "" # Empty means all namespaces are included (except those in EXCLUDE)
+            - name: KUBETIMER_TIMEZONE
+              value: "America/Sao_Paulo"
+            - name: KUBETIMER_DRY_RUN
+              value: "false"
+
           resources:
             requests:
-              memory: "80Mi"
-              cpu: "50m"
+              memory: "128Mi"
+              cpu: "100m"
             limits:
-              memory: "200Mi"
-              cpu: "500m"
+              memory: "512Mi"
+              cpu: "1000m"
 
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8080
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5

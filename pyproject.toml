@@ -1,10 +1,11 @@
 [project]
 name = "kubetimer"
-version = "0.1.0"
+version = "0.2.0"
 description = "A way to manage lifecycle of Kubernetes resources using time."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "apscheduler>=3.11.2",
     "kopf>=1.40.0",
     "kubernetes>=34.1.0",
     "pydantic>=2.12.5",
@@ -24,4 +25,30 @@ packages = ["kubetimer"]
 installer = "uv"
 
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=1.0",
+    "black>=26.1.0",
+    "flake8>=7.0",
+    "mypy>=1.15",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v"
+
+[tool.black]
+line-length = 88
+target-version = ["py314"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true

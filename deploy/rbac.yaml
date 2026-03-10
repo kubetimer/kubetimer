@@ -1,6 +1,6 @@
 ---
 # RBAC for KubeTimer Operator
-# This gives the operator permission to watch CRDs and manage Deployments
+# This gives the operator permission to watch and manage Deployments
 
 # ServiceAccount - Identity for the operator pod
 apiVersion: v1
@@ -16,20 +16,10 @@ kind: ClusterRole
 metadata:
   name: kubetimer-operator
 rules:
-  # Allow Kopf/Client to see CRDs to know what exists
-  - apiGroups: ["apiextensions.k8s.io"]
-    resources: ["customresourcedefinitions"]
-    verbs: ["list", "watch", "get"]
-    
-  # Watch our CRD
-  - apiGroups: ["kubetimer.io"]
-    resources: ["kubetimerconfigs"]
-    verbs: ["get", "list", "watch", "patch"]
-  
   # Manage Deployments (our target resource)
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get", "list", "watch", "delete"]
+    verbs: ["get", "list", "watch", "patch", "delete"]
   
   # Kopf needs these for its internal operations
   - apiGroups: [""]

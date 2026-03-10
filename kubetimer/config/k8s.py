@@ -1,28 +1,34 @@
+"""
+Kubernetes client configuration and factories.
+
+This module provides K8s client initialization and API client factories.
+Configuration is now sourced from environment variables via Settings.
+"""
+
+from functools import lru_cache
+
 from kubernetes import client, config
 
 from kubetimer.utils.logs import setup_logging
+
 logger = setup_logging()
 
+_connection_pool_maxsize: int = 0
 
-class KubeTimerConfig():
-    def __init__(
-        self,
-        name: str,
-        enabled_resources: list[str],
-        annotation_key: str,
-        dry_run: bool,
-        timezone: str,
-        namespaces: dict[str, list[str]],
-    ):
-        self.name = name
-        self.enabled_resources = enabled_resources
-        self.annotation_key = annotation_key
-        self.dry_run = dry_run
-        self.timezone = timezone
-        self.namespaces = namespaces
-        
 
-def load_k8s_config():
+def load_k8s_config(pool_size: int | None = None):
+    """
+    Load Kubernetes configuration.
+
+    Tries in-cluster config first (for production), falls back to
+    local kubeconfig (for development).
+
+    When *pool_size* is given the default ``Configuration`` object's
+    ``connection_pool_maxsize`` is enlarged **before** any API client
+    is created so that urllib3 honours the larger pool from the start.
+    """
+    global _connection_pool_maxsize
+
     try:
         config.load_incluster_config()
         logger.info("loaded_incluster_config")
@@ -30,35 +36,60 @@ def load_k8s_config():
         config.load_kube_config()
         logger.info("loaded_local_kube_config")
 
+    # Enlarge the connection pool if requested
+    if pool_size is not None:
+        k8s_cfg = client.Configuration.get_default_copy()
+        k8s_cfg.connection_pool_maxsize = pool_size
+        client.Configuration.set_default(k8s_cfg)
+        _connection_pool_maxsize = pool_size
+        logger.info(
+            "k8s_connection_pool_maxsize_configured",
+            pool_size=pool_size,
+        )
+    else:
+        k8s_config = client.Configuration.get_default_copy()
+        _connection_pool_maxsize = k8s_config.connection_pool_maxsize
+        logger.debug(
+            "k8s_connection_pool_maxsize",
+            pool_size=_connection_pool_maxsize,
+        )
 
+
+def get_connection_pool_maxsize() -> int | None:
+    """Return the K8s client's connection_pool_maxsize.
+
+    Available after load_k8s_config() has been called.
+    """
+    if _connection_pool_maxsize == 0:
+        logger.warning(
+            "connection_pool_maxsize_not_set",
+            message="load_k8s_config() must be called before getting pool size",
+        )
+        return None
+    return _connection_pool_maxsize
+
+
+@lru_cache(maxsize=1)
 def apps_v1_client() -> client.AppsV1Api:
+    """
+    Return a cached AppsV1Api client for managing Deployments.
+
+    A single instance is reused so urllib3 connection pooling
+    stays effective across concurrent calls. The @lru_cache
+    decorator provides thread-safe, lazy initialization.
+    """
     return client.AppsV1Api()
 
 
-def custom_objects_client() -> client.CustomObjectsApi:
-    return client.CustomObjectsApi()
-
-
-def get_kubetimerconfig() -> KubeTimerConfig:
-    api = custom_objects_client()
-    try:
-        config = api.list_cluster_custom_object(
-            group="kubetimer.io",
-            version="v1",
-            plural="kubetimerconfigs",
-            limit=1,
-        ).get('items')[0]
-
-        kubetimerconfig = KubeTimerConfig(
-            name=config['metadata']['name'],
-            enabled_resources=config['spec'].get('enabledResources'),
-            annotation_key=config['spec'].get('annotationKey', 'kubetimer.io/ttl'),
-            dry_run=config['spec'].get('dryRun', False),
-            timezone=config['spec'].get('timezone', 'UTC'),
-            namespaces=config['spec'].get('namespaces', {}),
-        )
-        return kubetimerconfig
-    
-    except Exception as e:
-        logger.error("failed_to_get_kubetimerconfig", error=str(e))
-        raise
+def close_k8s_clients() -> None:
+    """
+    Close the cached K8s API client and its urllib3 connection pool.
+    """
+    cached_client = apps_v1_client.cache_info()
+    if cached_client.currsize > 0:
+        try:
+            apps_v1_client().api_client.close()
+        except Exception:
+            pass
+        apps_v1_client.cache_clear()
+        logger.info("k8s_api_client_closed")
