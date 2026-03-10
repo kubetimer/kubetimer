@@ -77,23 +77,8 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
         )
 
         memo.reconciling_uids = set()
-        memo.reconciliation_done = False
 
         await reconcile_existing_deployments(memo=memo)
-
-        # is this flag needed? --- it is set to True at the end of this startup_handler,
-        #  but it is not currently used anywhere else in the code.  It could be used by
-        #  event handlers to check if startup reconciliation is still in progress, and
-        # if so, they could skip scheduling new jobs for Deployments that are being
-        # reconciled.  This would prevent potential conflicts between the startup
-        # reconciliation process and any new events that come in during that time.
-        # However, since the reconciling_uids set is already being used to track which
-        # Deployments are being reconciled, it may not be strictly necessary to have this
-        # additional flag.  It could be useful for clarity and to avoid edge cases where
-        # a Deployment's UID is not in the reconciling_uids set but startup reconciliation
-        # is still ongoing.  Overall, it seems like a reasonable safety check to have,
-        # but it may not be strictly required given the current logic of the code.
-        memo.reconciliation_done = True
 
         logger.info(
             "reconciliation_complete_handlers_unblocked",

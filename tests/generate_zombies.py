@@ -21,7 +21,7 @@ import random
 import string
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from kubernetes import client, config
@@ -35,6 +35,7 @@ LABEL_VALUE = "kubetimer-zombie"
 
 # ── Helpers ──────────────────────────────────────────────────────────
 tz = ZoneInfo("America/Sao_Paulo")
+
 
 def _random_suffix(length: int = 6) -> str:
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))

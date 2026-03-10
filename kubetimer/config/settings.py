@@ -24,6 +24,7 @@ def _validate_prefix_label(label: str) -> bool:
             return False
     return True
 
+
 def _validate_prefix(prefix: str) -> bool:
     return (
         len(prefix) > 0
@@ -160,7 +161,7 @@ class Settings(BaseSettings):
             return v
         try:
             ZoneInfo(v)
-        except (ZoneInfoNotFoundError, KeyError):
+        except ZoneInfoNotFoundError, KeyError:
             raise ValueError(
                 f"Invalid timezone: {v!r}. "
                 "Use IANA format like 'America/New_York' or 'Europe/London'."

@@ -7,7 +7,12 @@ to avoid cross-test pollution.
 
 import pytest
 
-from kubetimer.config.settings import Settings, _validate_prefix, _validate_name, _validate_prefix_label
+from kubetimer.config.settings import (
+    Settings,
+    _validate_prefix,
+    _validate_name,
+    _validate_prefix_label,
+)
 
 
 class TestSettings:
@@ -98,7 +103,9 @@ class TestSettings:
 
     def test_settings_validate_annotation_key_invalid_prefix(self, monkeypatch):
         monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", ".invalidPrefix/annotation")
-        error_pattern = r"Invalid annotation key prefix or name: '\.invalidPrefix'/'annotation'\."
+        error_pattern = (
+            r"Invalid annotation key prefix or name: '\.invalidPrefix'/'annotation'\."
+        )
         with pytest.raises(
             Exception,
             match=error_pattern,
@@ -107,7 +114,9 @@ class TestSettings:
 
     def test_settings_validate_annotation_key_invalid_name(self, monkeypatch):
         monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", "validprefix/InvalidName!")
-        error_pattern = r"Invalid annotation key prefix or name: 'validprefix'/'InvalidName!'\."
+        error_pattern = (
+            r"Invalid annotation key prefix or name: 'validprefix'/'InvalidName!'\."
+        )
         with pytest.raises(
             Exception,
             match=error_pattern,

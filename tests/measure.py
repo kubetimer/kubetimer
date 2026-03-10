@@ -10,7 +10,9 @@ def watch_race():
     while True:
         print("Checking for zombies...")
         count = len(
-            api.list_namespaced_deployment("default", label_selector="app=kubetimer-zombie").items
+            api.list_namespaced_deployment(
+                "default", label_selector="app=kubetimer-zombie"
+            ).items
         )
         print(f"Found {count} zombies.")
         if count > 0:
@@ -22,7 +24,9 @@ def watch_race():
 
     while True:
         count = len(
-            api.list_namespaced_deployment("default", label_selector="app=kubetimer-zombie").items
+            api.list_namespaced_deployment(
+                "default", label_selector="app=kubetimer-zombie"
+            ).items
         )
         if count == 0:
             end_time = time.time()
