@@ -34,7 +34,7 @@ LABEL_VALUE = "kubetimer-zombie"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
-
+tz = ZoneInfo("America/Sao_Paulo")
 
 def _random_suffix(length: int = 6) -> str:
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
@@ -43,15 +43,12 @@ def _random_suffix(length: int = 6) -> str:
 def _random_ttl(past_ratio: float) -> str:
     """Return a random ISO 8601 TTL string in America/Sao_Paulo.
 
-    With probability `past_ratio` the TTL is in the past
-    (1–20 minutes ago). Otherwise it's in the future
-    (1–120 minutes from now).
+    With probability `past_ratio` the TTL is in the past.
+    Otherwise it's in the future.
     """
-    tz = ZoneInfo("America/Sao_Paulo")
     now = datetime.now(tz)
 
     randomnumber = random.random()
-    print(f"Random number: {randomnumber:.4f} (past_ratio={past_ratio:.2f})")
 
     if randomnumber < past_ratio:
         delta = timedelta(seconds=random.randint(1, 300))
@@ -160,8 +157,8 @@ def run(
                 created += 1
 
                 # Track past vs future
-                ttl_dt = datetime.fromisoformat(ttl).replace(tzinfo=timezone.utc)
-                if ttl_dt <= datetime.now(timezone.utc):
+                ttl_dt = datetime.fromisoformat(ttl).replace(tzinfo=tz)
+                if ttl_dt <= datetime.now(tz):
                     past_count += 1
                 else:
                     future_count += 1

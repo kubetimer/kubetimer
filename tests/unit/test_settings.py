@@ -7,7 +7,7 @@ to avoid cross-test pollution.
 
 import pytest
 
-from kubetimer.config.settings import Settings, _validate_prefix, _validate_name
+from kubetimer.config.settings import Settings, _validate_prefix, _validate_name, _validate_prefix_label
 
 
 class TestSettings:
@@ -58,8 +58,8 @@ class TestSettings:
             Settings(_env_file=None)
 
     def test_validate_prefix_passing(self):
-        prefix = "validprefix.io"
-        assert _validate_prefix(prefix)
+        assert _validate_prefix("validprefix.io")
+        assert _validate_prefix("my-team.example.com")
 
     def test_validate_prefix_invalid_size(self):
         max_length = 253
@@ -98,17 +98,19 @@ class TestSettings:
 
     def test_settings_validate_annotation_key_invalid_prefix(self, monkeypatch):
         monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", ".invalidPrefix/annotation")
+        error_pattern = r"Invalid annotation key prefix or name: '\.invalidPrefix'/'annotation'\."
         with pytest.raises(
             Exception,
-            match=r"Invalid annotation key prefix: '\.invalidPrefix'\.",
+            match=error_pattern,
         ):
             Settings(_env_file=None)
 
     def test_settings_validate_annotation_key_invalid_name(self, monkeypatch):
         monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", "validprefix/InvalidName!")
+        error_pattern = r"Invalid annotation key prefix or name: 'validprefix'/'InvalidName!'\."
         with pytest.raises(
             Exception,
-            match=r"Invalid annotation key prefix: 'validprefix'\.",
+            match=error_pattern,
         ):
             Settings(_env_file=None)
 
@@ -122,3 +124,20 @@ class TestSettings:
         monkeypatch.setenv("KUBETIMER_ANNOTATION_KEY", "validprefix/valid-name_123")
         s = Settings(_env_file=None)
         assert s.annotation_key == "validprefix/valid-name_123"
+
+    def test_validate_prefix_label_passing(self):
+        assert _validate_prefix_label("validprefix")
+        assert _validate_prefix_label("my-team")
+        assert _validate_prefix_label("myteam123")
+
+    def test_validate_prefix_label_invalid(self):
+        label = "invalid_label"
+        assert not _validate_prefix_label(label)
+
+    def test_validate_prefix_label_invalid_characters(self):
+        label = "invalid_label!"
+        assert not _validate_prefix_label(label)
+
+    def test_validate_prefix_label_empty(self):
+        label = ""
+        assert _validate_prefix_label(label)

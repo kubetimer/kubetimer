@@ -67,6 +67,14 @@ async def on_deployment_created_with_ttl(
             name=name,
             ttl=ttl_value,
         )
+        if getattr(memo, "dry_run", False):
+            logger.info(
+                "dry_run_skip_immediate_delete_on_create",
+                namespace=namespace,
+                name=name,
+                ttl=ttl_value,
+            )
+            return
         await async_delete_namespaced_deployment(namespace, name)
         return
 

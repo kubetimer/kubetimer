@@ -18,13 +18,19 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _validate_prefix_label(label: str) -> bool:
+    for ch in label:
+        if not (ch.isalnum() or ch == "-"):
+            return False
+    return True
+
 def _validate_prefix(prefix: str) -> bool:
     return (
         len(prefix) > 0
         and len(prefix) <= 253
         and prefix[0].isalnum()
         and prefix[-1].isalnum()
-        and all(c.isalnum() or c in "-." for c in prefix.split("."))
+        and all(_validate_prefix_label(label) for label in prefix.split("."))
     )
 
 
@@ -154,7 +160,7 @@ class Settings(BaseSettings):
             return v
         try:
             ZoneInfo(v)
-        except ZoneInfoNotFoundError, KeyError:
+        except (ZoneInfoNotFoundError, KeyError):
             raise ValueError(
                 f"Invalid timezone: {v!r}. "
                 "Use IANA format like 'America/New_York' or 'Europe/London'."
@@ -182,9 +188,9 @@ class Settings(BaseSettings):
             prefix, name = splitted
             if not prefix or not _validate_prefix(prefix) or not _validate_name(name):
                 raise ValueError(
-                    f"Invalid annotation key prefix:"
-                    f" {prefix!r}. Must be a valid DNS"
-                    " subdomain (e.g., 'example.com')."
+                    f"Invalid annotation key prefix or name:"
+                    f" {prefix!r}/{name!r}. Must be a valid DNS"
+                    " subdomain (e.g., 'example.com') and a valid name."
                 )
         return v
 

@@ -118,7 +118,7 @@ class TestShutdownHandler:
             mock_close.assert_called_once()
 
     async def test_graceful_shutdown_stops_scheduler(self, memo):
-        """Scheduler should be shut down with wait=False."""
+        """Scheduler should be shut down with wait=True."""
         await shutdown_handler(memo)
 
         memo.scheduler.shutdown.assert_called_once_with(wait=True)
