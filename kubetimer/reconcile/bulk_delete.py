@@ -9,6 +9,11 @@ import asyncio
 
 from kubernetes.client.exceptions import ApiException
 
+from kubetimer.metrics import (
+    DELETE_DURATION,
+    DEPLOYMENTS_DELETED,
+    track_duration,
+)
 from kubetimer.reconcile.fetcher import async_delete_namespaced_deployment
 from kubetimer.reconcile.models import TtlDeployment
 from kubetimer.utils.logs import get_logger
@@ -41,13 +46,19 @@ async def _delete_one(
             return "dry_run"
 
         try:
-            await async_delete_namespaced_deployment(ns, name)
+            async with track_duration(
+                DELETE_DURATION, source="reconciler", namespace=ns
+            ):
+                await async_delete_namespaced_deployment(ns, name)
             logger.info(
                 "reconcile_deployment_deleted",
                 namespace=ns,
                 name=name,
                 ttl=ttl_value.isoformat(),
             )
+            DEPLOYMENTS_DELETED.labels(
+                source="reconciler", namespace=ns, outcome="deleted"
+            ).inc()
             return "deleted"
         except ApiException as e:
             if e.status == 404:
@@ -57,6 +68,9 @@ async def _delete_one(
                     name=name,
                     message="Deployment was already deleted (likely by event handler)",
                 )
+                DEPLOYMENTS_DELETED.labels(
+                    source="reconciler", namespace=ns, outcome="already_gone"
+                ).inc()
                 return "deleted"
             logger.error(
                 "reconcile_deployment_delete_failed",
@@ -65,6 +79,9 @@ async def _delete_one(
                 ttl=ttl_value,
                 error=str(e),
             )
+            DEPLOYMENTS_DELETED.labels(
+                source="reconciler", namespace=ns, outcome="error"
+            ).inc()
             return "error"
         except Exception as e:
             logger.error(
@@ -74,6 +91,9 @@ async def _delete_one(
                 ttl=ttl_value,
                 error=str(e),
             )
+            DEPLOYMENTS_DELETED.labels(
+                source="reconciler", namespace=ns, outcome="error"
+            ).inc()
             return "error"
 
 

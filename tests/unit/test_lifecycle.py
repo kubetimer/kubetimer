@@ -32,8 +32,10 @@ class TestStartupHandler:
     @patch("kubetimer.AsyncIOScheduler")
     @patch("kubetimer.configure_memo")
     @patch("kubetimer.load_k8s_config")
+    @patch("kubetimer.start_metrics_server")
     async def test_configures_thread_pool_from_settings(
         self,
+        mock_metrics_server,
         mock_load,
         mock_configure,
         mock_sched_cls,
@@ -61,8 +63,10 @@ class TestStartupHandler:
     @patch("kubetimer.AsyncIOScheduler")
     @patch("kubetimer.configure_memo")
     @patch("kubetimer.load_k8s_config")
+    @patch("kubetimer.start_metrics_server")
     async def test_starts_apscheduler_and_settings(
         self,
+        mock_metrics_server,
         mock_load,
         mock_configure,
         mock_sched_cls,

@@ -18,12 +18,23 @@ spec:
     metadata:
       labels:
         app: kubetimer-operator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: kubetimer-operator
       containers:
         - name: operator
-          image: ryanjorgeac/kubetimer:v0.2.2-log
+          image: ryanjorgeac/kubetimer:v0.2.2-metrics
           imagePullPolicy: Always
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 9091
+              protocol: TCP
           env:
             - name: KUBETIMER_LOG_LEVEL
               value: "INFO"
@@ -41,6 +52,10 @@ spec:
               value: "America/Sao_Paulo"
             - name: KUBETIMER_DRY_RUN
               value: "false"
+            - name: KUBETIMER_METRICS_ENABLED
+              value: "true"
+            - name: KUBETIMER_METRICS_PORT
+              value: "9091"
 
           resources:
             requests:

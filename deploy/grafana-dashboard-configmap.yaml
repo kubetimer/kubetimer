@@ -1,0 +1,662 @@
+---
+# Grafana dashboard auto-provisioned by kube-prometheus-stack's sidecar.
+#
+# The sidecar watches for ConfigMaps with the label "grafana_dashboard: '1'"
+# in the configured search namespaces.  By default it watches the namespace
+# where Grafana is deployed (usually "monitoring").
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubetimer-grafana-dashboard
+  namespace: monitoring
+  labels:
+    app: kubetimer-operator
+    grafana_dashboard: "1"
+data:
+  kubetimer.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "description": "KubeTimer Operator — Deletion latency, concurrent events, startup & reconciliation metrics",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 100,
+          "title": "Deletion Latency",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "pointSize": 5,
+                "showPoints": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+          "id": 1,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.5, sum(rate(kubetimer_delete_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le))",
+              "legendFormat": "p50 (median)"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(kubetimer_delete_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le))",
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(kubetimer_delete_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le))",
+              "legendFormat": "p99"
+            }
+          ],
+          "title": "Deletion Latency Percentiles",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+          "id": 2,
+          "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(1, sum(rate(kubetimer_delete_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le))",
+              "legendFormat": "max"
+            }
+          ],
+          "title": "Slowest Deletion",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.5 },
+                  { "color": "red", "value": 2 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+          "id": 3,
+          "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0, sum(rate(kubetimer_delete_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le))",
+              "legendFormat": "min"
+            }
+          ],
+          "title": "Fastest Deletion",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 12, "x": 12, "y": 5 },
+          "id": 4,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.5, sum(rate(kubetimer_delete_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le, source))",
+              "legendFormat": "p50 — {{source}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(kubetimer_delete_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le, source))",
+              "legendFormat": "p95 — {{source}}"
+            }
+          ],
+          "title": "Deletion Latency by Source",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 },
+          "id": 101,
+          "title": "Deletion Throughput",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "bars",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "stacking": { "mode": "normal" }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
+          "id": 5,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "sum(rate(kubetimer_deployments_deleted_total{job=~\"$job\"}[$__rate_interval])) by (source)",
+              "legendFormat": "{{source}}"
+            }
+          ],
+          "title": "Deletions / sec by Source",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "bars",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "stacking": { "mode": "normal" }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
+          "id": 6,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "sum(rate(kubetimer_deployments_deleted_total{job=~\"$job\"}[$__rate_interval])) by (outcome)",
+              "legendFormat": "{{outcome}}"
+            }
+          ],
+          "title": "Deletions / sec by Outcome",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 20 },
+          "id": 102,
+          "title": "Concurrent Events & Handler Performance",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 20,
+                "stacking": { "mode": "normal" }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+          "id": 7,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "kubetimer_concurrent_events{job=~\"$job\"}",
+              "legendFormat": "{{event_type}}"
+            }
+          ],
+          "title": "Concurrent Events (in-flight handlers)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+          "id": 8,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(kubetimer_event_handler_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le, event_type))",
+              "legendFormat": "p95 — {{event_type}}"
+            },
+            {
+              "expr": "histogram_quantile(0.5, sum(rate(kubetimer_event_handler_duration_seconds_bucket{job=~\"$job\"}[$__rate_interval])) by (le, event_type))",
+              "legendFormat": "p50 — {{event_type}}"
+            }
+          ],
+          "title": "Event Handler Duration by Type",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+          "id": 106,
+          "title": "Pod Resource Usage",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "pointSize": 5,
+                "showPoints": "never",
+                "axisLabel": "CPU cores"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Request" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Limit" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+          "id": 15,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\"}[$__rate_interval]))",
+              "legendFormat": "Usage"
+            },
+            {
+              "expr": "sum(kube_pod_container_resource_requests{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\", resource=\"cpu\"})",
+              "legendFormat": "Request"
+            },
+            {
+              "expr": "sum(kube_pod_container_resource_limits{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\", resource=\"cpu\"})",
+              "legendFormat": "Limit"
+            }
+          ],
+          "title": "CPU Usage",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "pointSize": 5,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Request" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Limit" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+          "id": 16,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\"})",
+              "legendFormat": "Working Set"
+            },
+            {
+              "expr": "sum(container_memory_rss{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\"})",
+              "legendFormat": "RSS"
+            },
+            {
+              "expr": "sum(kube_pod_container_resource_requests{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\", resource=\"memory\"})",
+              "legendFormat": "Request"
+            },
+            {
+              "expr": "sum(kube_pod_container_resource_limits{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\", resource=\"memory\"})",
+              "legendFormat": "Limit"
+            }
+          ],
+          "title": "Memory Usage",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
+          "id": 103,
+          "title": "Concurrency vs Resource Usage",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "axisPlacement": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "CPU" },
+                "properties": [
+                  { "id": "unit", "value": "short" },
+                  { "id": "custom.axisPlacement", "value": "right" }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Concurrent create" },
+                "properties": [
+                  { "id": "unit", "value": "short" },
+                  { "id": "custom.axisPlacement", "value": "left" }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+          "id": 9,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "sum(kubetimer_concurrent_events{job=~\"$job\"})",
+              "legendFormat": "Concurrent create"
+            },
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\"}[$__rate_interval]))",
+              "legendFormat": "CPU"
+            }
+          ],
+          "title": "Concurrent Events vs CPU",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "axisPlacement": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Memory" },
+                "properties": [
+                  { "id": "unit", "value": "bytes" },
+                  { "id": "custom.axisPlacement", "value": "right" }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Concurrent create" },
+                "properties": [
+                  { "id": "unit", "value": "short" },
+                  { "id": "custom.axisPlacement", "value": "left" }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
+          "id": 10,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "sum(kubetimer_concurrent_events{job=~\"$job\"})",
+              "legendFormat": "Concurrent create"
+            },
+            {
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\"})",
+              "legendFormat": "Memory"
+            }
+          ],
+          "title": "Concurrent Events vs Memory",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 50 },
+          "id": 104,
+          "title": "Scheduling",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 10
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 51 },
+          "id": 11,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "rate(kubetimer_jobs_scheduled_total{job=~\"$job\"}[$__rate_interval])",
+              "legendFormat": "scheduled / sec"
+            },
+            {
+              "expr": "rate(kubetimer_jobs_cancelled_total{job=~\"$job\"}[$__rate_interval])",
+              "legendFormat": "cancelled / sec"
+            }
+          ],
+          "title": "Jobs Scheduled & Cancelled Rate",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 60 },
+          "id": 105,
+          "title": "Startup & Reconciliation",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 60 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 61 },
+          "id": 12,
+          "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "targets": [
+            {
+              "expr": "kubetimer_startup_duration_seconds_sum{job=~\"$job\"}",
+              "legendFormat": "startup"
+            }
+          ],
+          "title": "Startup Duration",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 60 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 61 },
+          "id": 13,
+          "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "targets": [
+            {
+              "expr": "kubetimer_reconcile_duration_seconds_sum{job=~\"$job\"}",
+              "legendFormat": "reconciliation"
+            }
+          ],
+          "title": "Reconciliation Duration",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 80
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "error" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 4, "w": 12, "x": 12, "y": 61 },
+          "id": 14,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "kubetimer_reconcile_deployments_total{job=~\"$job\"}",
+              "legendFormat": "{{status}}"
+            }
+          ],
+          "title": "Reconciled Deployments by Status",
+          "type": "bargauge"
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["kubetimer", "kubernetes", "operator"],
+      "templating": {
+        "list": [
+          {
+            "current": { "selected": false, "text": "Prometheus", "value": "prometheus" },
+            "hide": 0,
+            "includeAll": false,
+            "name": "DS_PROMETHEUS",
+            "options": [],
+            "query": "prometheus",
+            "type": "datasource"
+          },
+          {
+            "current": { "selected": false, "text": "kubetimer-system/kubetimer-operator-metrics", "value": "kubetimer-system/kubetimer-operator-metrics" },
+            "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+            "definition": "label_values(kubetimer_operator_info, job)",
+            "hide": 0,
+            "includeAll": true,
+            "name": "job",
+            "query": "label_values(kubetimer_operator_info, job)",
+            "type": "query"
+          }
+        ]
+      },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "KubeTimer Operator",
+      "uid": "kubetimer-operator"
+    }

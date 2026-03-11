@@ -8,6 +8,7 @@ import asyncio
 from time import time
 import kopf
 
+from kubetimer.metrics import RECONCILE_DEPLOYMENTS, RECONCILE_DURATION
 from kubetimer.reconcile.bulk_delete import bulk_delete_expired
 from kubetimer.reconcile.fetcher import list_deployments_all_namespaces_paginated
 from kubetimer.reconcile.models import TtlDeployment
@@ -168,10 +169,18 @@ async def reconcile_existing_deployments(
     for dep in expired:
         reconciling_uids.discard(dep.uid)
 
+    elapsed = time() - starttime
+
+    # Record Prometheus metrics for reconciliation
+    RECONCILE_DURATION.observe(elapsed)
+    RECONCILE_DEPLOYMENTS.labels(status="expired").set(expired_count)
+    RECONCILE_DEPLOYMENTS.labels(status="scheduled").set(scheduled_count)
+    RECONCILE_DEPLOYMENTS.labels(status="error").set(error_count)
+
     logger.info(
         "reconcile_complete",
         scheduled=scheduled_count,
         expired_deleted=expired_count,
         errors=error_count,
-        duration_seconds=f"{time() - starttime:.9f}",
+        duration_seconds=f"{elapsed:.9f}",
     )

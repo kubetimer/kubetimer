@@ -25,6 +25,11 @@ from kubetimer.handlers.deployment import (
     on_ttl_annotation_changed,
 )
 from kubetimer.handlers.registry import configure_memo
+from kubetimer.metrics import (
+    OPERATOR_INFO,
+    STARTUP_DURATION,
+    start_metrics_server,
+)
 from kubetimer.reconcile.orchestrator import reconcile_existing_deployments
 from kubetimer.utils.logs import get_logger, map_log_level, setup_logging
 
@@ -33,6 +38,10 @@ kubetimer_settings = get_settings()
 
 
 async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_):
+
+    import time as _time
+
+    _startup_start = _time.monotonic()
 
     logger.info("kubetimer_operator_starting_up")
     settings.execution.max_workers = 20
@@ -76,6 +85,18 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
             coalesce=True,
         )
 
+        # Start Prometheus metrics HTTP server
+        if kubetimer_settings.metrics_enabled:
+            start_metrics_server(kubetimer_settings.metrics_port)
+            OPERATOR_INFO.info(
+                {
+                    "version": __version__,
+                    "dry_run": str(kubetimer_settings.dry_run),
+                    "timezone": kubetimer_settings.timezone,
+                    "log_level": kubetimer_settings.log_level,
+                }
+            )
+
         memo.reconciling_uids = set()
 
         await reconcile_existing_deployments(memo=memo)
@@ -84,6 +105,9 @@ async def startup_handler(settings: kopf.OperatorSettings, memo: kopf.Memo, **_)
             "reconciliation_complete_handlers_unblocked",
             remaining_reconciling_uids=len(memo.reconciling_uids),
         )
+
+        # Observe total startup duration
+        STARTUP_DURATION.observe(_time.monotonic() - _startup_start)
 
     except Exception as e:
         logger.error("startup_config_load_failed", error=str(e))

@@ -5,6 +5,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.jobstores.base import JobLookupError
 
+from kubetimer.metrics import (
+    DELETE_DURATION,
+    DEPLOYMENTS_DELETED,
+    JOBS_CANCELLED,
+    JOBS_SCHEDULED,
+    track_duration,
+)
 from kubetimer.reconcile.fetcher import (
     async_delete_namespaced_deployment,
     get_namespaced_deployment,
@@ -111,8 +118,14 @@ async def delete_deployment_job(
                 name=name,
                 ttl=ttl_value,
             )
+            DEPLOYMENTS_DELETED.labels(
+                source="scheduler", namespace=namespace, outcome="dry_run"
+            ).inc()
         else:
-            await async_delete_namespaced_deployment(namespace, name)
+            async with track_duration(
+                DELETE_DURATION, source="scheduler", namespace=namespace
+            ):
+                await async_delete_namespaced_deployment(namespace, name)
             logger.info(
                 "deployment_deleted_by_scheduler",
                 job_id=job_id,
@@ -120,6 +133,9 @@ async def delete_deployment_job(
                 name=name,
                 ttl=ttl_value,
             )
+            DEPLOYMENTS_DELETED.labels(
+                source="scheduler", namespace=namespace, outcome="deleted"
+            ).inc()
 
     except Exception as e:
         logger.error(
@@ -130,6 +146,9 @@ async def delete_deployment_job(
             error=str(e),
             error_type=type(e).__name__,
         )
+        DEPLOYMENTS_DELETED.labels(
+            source="scheduler", namespace=namespace, outcome="error"
+        ).inc()
     finally:
         if reconciling_uids is not None:
             reconciling_uids.discard(uid)
@@ -193,6 +212,7 @@ def schedule_deletion_job(
             run_date=ttl_datetime.isoformat(),
             seconds_until_execution=(ttl_datetime - now).total_seconds(),
         )
+        JOBS_SCHEDULED.inc()
         return True
 
     except Exception as e:
@@ -221,6 +241,7 @@ def cancel_deletion_job(
         logger.info(
             "deletion_job_cancelled", job_id=job_id, namespace=namespace, name=name
         )
+        JOBS_CANCELLED.inc()
         return True
 
     except JobLookupError:

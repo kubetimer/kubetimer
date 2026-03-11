@@ -26,6 +26,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH="/app"
 
-EXPOSE 8080
+EXPOSE 8080 9091
 
 CMD ["python", "kubetimer/main.py"] 

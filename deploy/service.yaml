@@ -1,0 +1,20 @@
+---
+# Service exposing the KubeTimer Prometheus metrics endpoint.
+# Used by the ServiceMonitor for kube-prometheus-stack auto-discovery.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubetimer-operator-metrics
+  namespace: kubetimer-system
+  labels:
+    app: kubetimer-operator
+spec:
+  selector:
+    app: kubetimer-operator
+  ports:
+    - name: metrics
+      port: 9091
+      targetPort: metrics
+      protocol: TCP
+  type: ClusterIP

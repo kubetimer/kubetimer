@@ -141,6 +141,21 @@ class Settings(BaseSettings):
         description="Read timeout in seconds for K8s API calls",
     )
 
+    metrics_enabled: bool = Field(
+        default=True,
+        description="Enable Prometheus metrics HTTP endpoint",
+    )
+
+    metrics_port: int = Field(
+        default=9091,
+        ge=1024,
+        le=65535,
+        description=(
+            "Port for the Prometheus metrics HTTP endpoint "
+            "(must differ from Kopf liveness probe on 8080)"
+        ),
+    )
+
     @property
     def api_timeout(self) -> tuple[int, int]:
         """Return (connect, read) timeout tuple for _request_timeout."""

@@ -1,0 +1,30 @@
+---
+# ServiceMonitor for kube-prometheus-stack.
+#
+# The Prometheus Operator discovers this CR and configures Prometheus to
+# scrape the KubeTimer metrics endpoint automatically.
+#
+# NOTE: The label "release: observability" must match the Helm
+# release name of your kube-prometheus-stack installation.  Adjust if
+# your release uses a different name.
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kubetimer-operator
+  namespace: kubetimer-system
+  labels:
+    app: kubetimer-operator
+    release: observability
+spec:
+  selector:
+    matchLabels:
+      app: kubetimer-operator
+  namespaceSelector:
+    matchNames:
+      - kubetimer-system
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
