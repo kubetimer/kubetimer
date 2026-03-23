@@ -176,7 +176,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
+          "gridPos": { "h": 6, "w": 12, "x": 0, "y": 11 },
           "id": 5,
           "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
           "targets": [
@@ -203,7 +203,7 @@ data:
             },
             "overrides": []
           },
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
+          "gridPos": { "h": 6, "w": 12, "x": 12, "y": 11 },
           "id": 6,
           "options": { "legend": { "displayMode": "table", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
           "targets": [
@@ -213,6 +213,62 @@ data:
             }
           ],
           "title": "Deletions / sec by Outcome",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1000 },
+                  { "color": "red", "value": 5000 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 3, "w": 12, "x": 0, "y": 17 },
+          "id": 17,
+          "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "targets": [
+            {
+              "expr": "sum(kubetimer_deployments_deleted_total{job=~\"$job\"})",
+              "legendFormat": "total"
+            }
+          ],
+          "title": "Total Deletions",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "pointSize": 5,
+                "showPoints": "auto"
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 6, "w": 12, "x": 12, "y": 17 },
+          "id": 18,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "clamp_min(sum(kubetimer_jobs_scheduled_total{job=~\"$job\"}) - sum(kubetimer_jobs_cancelled_total{job=~\"$job\"}) - sum(kubetimer_deployments_deleted_total{job=~\"$job\", source=\"scheduler\"}), 0)",
+              "legendFormat": "pending"
+            }
+          ],
+          "title": "Pending Scheduled Jobs",
           "type": "timeseries"
         },
         {
@@ -377,6 +433,10 @@ data:
           "id": 16,
           "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
           "targets": [
+            {
+              "expr": "sum(container_memory_usage_bytes{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\"})",
+              "legendFormat": "Usage (kubectl top)"
+            },
             {
               "expr": "sum(container_memory_working_set_bytes{namespace=\"kubetimer-system\", pod=~\"kubetimer-operator-.*\"})",
               "legendFormat": "Working Set"
@@ -629,6 +689,119 @@ data:
           ],
           "title": "Reconciled Deployments by Status",
           "type": "bargauge"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 },
+          "id": 107,
+          "title": "Zombie Pod Status",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 20,
+                "pointSize": 5,
+                "showPoints": "never",
+                "stacking": { "mode": "normal" }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Pending" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Running" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Succeeded" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Failed" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 67 },
+          "id": 19,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "count by (phase) (kube_pod_status_phase{namespace=\"default\", pod=~\"zombie-.*\", phase=\"Running\"} == 1) or label_replace(vector(0), \"phase\", \"Running\", \"\", \"\")",
+              "legendFormat": "{{phase}}"
+            },
+            {
+              "expr": "count by (phase) (kube_pod_status_phase{namespace=\"default\", pod=~\"zombie-.*\", phase=\"Pending\"} == 1) or label_replace(vector(0), \"phase\", \"Pending\", \"\", \"\")",
+              "legendFormat": "{{phase}}"
+            }
+          ],
+          "title": "Zombie Pod Count by Phase",
+          "type": "timeseries"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "line",
+                "lineWidth": 2,
+                "fillOpacity": 15,
+                "pointSize": 5,
+                "showPoints": "never"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Cluster Total" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "semi-dark-blue", "mode": "fixed" } },
+                  { "id": "custom.lineWidth", "value": 3 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Minikube Limit (500)" },
+                "properties": [
+                  { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+                  { "id": "custom.fillOpacity", "value": 0 },
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 67 },
+          "id": 20,
+          "options": { "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] }, "tooltip": { "mode": "multi" } },
+          "targets": [
+            {
+              "expr": "count(kube_pod_info)",
+              "legendFormat": "Cluster Total"
+            },
+            {
+              "expr": "vector(500)",
+              "legendFormat": "Minikube Limit (500)"
+            }
+          ],
+          "title": "Total Cluster Pods vs Limit",
+          "type": "timeseries"
         }
       ],
       "schemaVersion": 39,

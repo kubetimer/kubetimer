@@ -139,10 +139,10 @@ No manual import needed.
 
 ```bash
 # Port-forward to Grafana
-kubectl port-forward -n monitoring svc/observability-grafana 3000:80
+kubectl port-forward -n monitoring svc/observability-grafana 8081:80
 ```
 
-Open [http://localhost:3000](http://localhost:3000):
+Open [http://localhost:8081](http://localhost:8081):
 
 - **Default credentials:** `admin` / `prom-operator`
   (or check your Helm values: `kubectl get secret -n monitoring observability-grafana -o jsonpath='{.data.admin-password}' | base64 -d`)

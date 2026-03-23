@@ -1,3 +1,4 @@
+import argparse
 import time
 from kubernetes import client, config
 
@@ -5,11 +6,19 @@ DEPLOYMENTS_COUNT = 2000
 BATCH_SIZE = 200  # Create in batches to be nice to Minikube
 
 
-def create_zombies():
+def create_zombies(*, with_pods: bool = False, count: int = DEPLOYMENTS_COUNT):
     config.load_kube_config()
     api = client.AppsV1Api()
 
-    print(f"Creating {DEPLOYMENTS_COUNT} zombie deployments...")
+    mode = "with-pods (replicas=1)" if with_pods else "zero-replica"
+    print(f"Creating {count} {mode} zombie deployments...")
+
+    container = {"name": "pause", "image": "registry.k8s.io/pause:3.10"}
+    if with_pods:
+        container["resources"] = {
+            "requests": {"cpu": "1m", "memory": "4Mi"},
+            "limits":   {"cpu": "2m", "memory": "8Mi"},
+        }
 
     base_deployment = {
         "apiVersion": "apps/v1",
@@ -20,19 +29,20 @@ def create_zombies():
             "annotations": {"kubetimer.io/ttl": "2025-01-01T00:00:00Z"},
         },
         "spec": {
-            "replicas": 0,  # 0 Replicas so we don't kill the CPU with Nginx pods
+            "replicas": 1 if with_pods else 0,
             "selector": {"matchLabels": {"app": "zombie"}},
             "template": {
                 "metadata": {"labels": {"app": "zombie"}},
                 "spec": {
-                    "containers": [{"name": "pause", "image": "k8s.gcr.io/pause"}]
+                    "terminationGracePeriodSeconds": 0,
+                    "containers": [container],
                 },
             },
         },
     }
 
     start = time.time()
-    for i in range(DEPLOYMENTS_COUNT):
+    for i in range(count):
         name = f"zombie-{i}"
         base_deployment["metadata"]["name"] = name
         try:
@@ -42,13 +52,23 @@ def create_zombies():
                 print(f"Error: {e}")
 
         if i % BATCH_SIZE == 0:
-            print(f"Created {i}/{DEPLOYMENTS_COUNT}...")
+            print(f"Created {i}/{count}...")
 
     print(
-        f"✅ Setup Complete. Created {DEPLOYMENTS_COUNT} "
+        f"Setup Complete. Created {count} "
         f"deployments in {time.time()-start:.2f}s"
     )
 
 
 if __name__ == "__main__":
-    create_zombies()
+    parser = argparse.ArgumentParser(description="Bulk-create expired zombie deployments")
+    parser.add_argument(
+        "--with-pods", action="store_true", default=False,
+        help="Create with 1 replica (actual pods) instead of 0",
+    )
+    parser.add_argument(
+        "--count", type=int, default=DEPLOYMENTS_COUNT,
+        help=f"Number of zombies to create (default: {DEPLOYMENTS_COUNT})",
+    )
+    args = parser.parse_args()
+    create_zombies(with_pods=args.with_pods, count=args.count)
