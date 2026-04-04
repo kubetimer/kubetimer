@@ -213,7 +213,33 @@ data:
             }
           ],
           "title": "Deletions / sec by Outcome",
-          "type": "timeseries"
+          "type": "timeseries",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "drawStyle": "bars",
+                "lineWidth": 1,
+                "fillOpacity": 80,
+                "stacking": { "mode": "normal" }
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "error" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "already_gone" },
+                "properties": [
+                  { "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }
+                ]
+              }
+            ]
+          }
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
@@ -231,7 +257,7 @@ data:
               }
             }
           },
-          "gridPos": { "h": 3, "w": 12, "x": 0, "y": 17 },
+          "gridPos": { "h": 3, "w": 8, "x": 0, "y": 17 },
           "id": 17,
           "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
           "targets": [
@@ -241,6 +267,33 @@ data:
             }
           ],
           "title": "Total Deletions",
+          "type": "stat"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 3, "w": 4, "x": 8, "y": 17 },
+          "id": 21,
+          "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+          "targets": [
+            {
+              "expr": "sum(kubetimer_deployments_deleted_total{job=~\"$job\", outcome=\"error\"}) or vector(0)",
+              "legendFormat": "errors"
+            }
+          ],
+          "title": "Total Errors",
           "type": "stat"
         },
         {

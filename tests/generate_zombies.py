@@ -59,7 +59,7 @@ def _random_ttl(past_ratio: float) -> str:
         delta = timedelta(seconds=random.randint(10, 300))
         dt = now - delta
     else:
-        delta = timedelta(seconds=random.randint(60, 280))
+        delta = timedelta(seconds=random.randint(60, 300))
         dt = now + delta
 
     return dt.isoformat()

@@ -503,7 +503,7 @@ def main():
     parser.add_argument("--reconciliation-batch", type=int, default=500, help="Deployments per reconciliation round (default: 500)")
     parser.add_argument("--max-existing", type=int, default=None, help="Max simultaneous zombie deployments in cluster (auto-set based on mode)")
     parser.add_argument("--with-pods", action="store_true", default=False, help="Create deployments with 1 replica (actual pods, pause image)")
-    parser.add_argument("--max-cluster-pods", type=int, default=300, help="Hard cap on total cluster pods (default: 300, safe for Minikube)")
+    parser.add_argument("--max-cluster-pods", type=int, default=450, help="Hard cap on total cluster pods (default: 450, safe for Minikube)")
     args = parser.parse_args()
 
     # Auto-set max_existing based on mode if not explicitly provided
