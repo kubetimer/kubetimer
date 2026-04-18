@@ -10,7 +10,7 @@ from kubetimer.reconcile.fetcher import (
     get_namespaced_deployment,
 )
 from kubetimer.utils.logs import get_logger
-from kubetimer.utils.time_utils import is_ttl_expired, parse_ttl
+from kubetimer.utils.time_utils import is_ttl_expired, parse_expires_at, parse_ttl_duration
 
 logger = get_logger(__name__)
 
@@ -31,12 +31,13 @@ async def delete_deployment_job(
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
+    expires_at_key: str | None = None,
     reconciling_uids: set[str] | None = None,
 ) -> None:
     """
     Execute the actual deletion of a Deployment (called by APScheduler).
 
-    Re-verifies UID + TTL expiry before deleting — the annotation might
+    Re-verifies UID + expiry before deleting — the annotation might
     have changed, or the Deployment might have been recreated since the
     job was scheduled.
     """
@@ -69,37 +70,61 @@ async def delete_deployment_job(
             return
 
         annotations = deployment.metadata.annotations or {}
-        ttl_value = annotations.get(annotation_key)
-        if not ttl_value:
-            logger.info(
-                "ttl_annotation_removed",
-                job_id=job_id,
-                namespace=namespace,
-                name=name,
-                message="TTL annotation was removed, skipping deletion",
-            )
-            return
+        expires_at_dt = None
 
-        try:
-            ttl_datetime = parse_ttl(ttl_value)
-            if not is_ttl_expired(ttl_datetime, timezone_str):
-                logger.warning(
-                    "ttl_not_expired_at_execution",
+        if expires_at_key:
+            expires_at_value = annotations.get(expires_at_key)
+            if expires_at_value:
+                try:
+                    expires_at_dt = parse_expires_at(expires_at_value)
+                except ValueError as e:
+                    logger.warning(
+                        "invalid_expires_at_annotation",
+                        job_id=job_id,
+                        namespace=namespace,
+                        name=name,
+                        expires_at=expires_at_value,
+                        error=str(e),
+                    )
+
+        if not expires_at_dt:
+            ttl_value = annotations.get(annotation_key)
+            if not ttl_value:
+                logger.info(
+                    "ttl_annotation_removed",
+                    job_id=job_id,
+                    namespace=namespace,
+                    name=name,
+                    message="TTL annotation was removed, skipping deletion",
+                )
+                return
+            try:
+                duration = parse_ttl_duration(ttl_value)
+                creation = datetime.fromisoformat(
+                    deployment.metadata.creation_timestamp.isoformat()
+                    if hasattr(deployment.metadata.creation_timestamp, "isoformat")
+                    else str(deployment.metadata.creation_timestamp)
+                )
+                expires_at_dt = creation + duration
+            except (ValueError, TypeError) as e:
+                logger.error(
+                    "invalid_ttl_at_execution",
                     job_id=job_id,
                     namespace=namespace,
                     name=name,
                     ttl=ttl_value,
-                    message="TTL was updated, not expired anymore",
+                    error=str(e),
                 )
                 return
-        except ValueError as e:
-            logger.error(
-                "invalid_ttl_at_execution",
+
+        if not is_ttl_expired(expires_at_dt, timezone_str):
+            logger.warning(
+                "ttl_not_expired_at_execution",
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
-                ttl=ttl_value,
-                error=str(e),
+                expires_at=expires_at_dt.isoformat(),
+                message="TTL was updated, not expired anymore",
             )
             return
 
@@ -109,7 +134,7 @@ async def delete_deployment_job(
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
-                ttl=ttl_value,
+                expires_at=expires_at_dt.isoformat(),
             )
         else:
             await async_delete_namespaced_deployment(namespace, name)
@@ -118,7 +143,7 @@ async def delete_deployment_job(
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
-                ttl=ttl_value,
+                expires_at=expires_at_dt.isoformat(),
             )
 
     except Exception as e:
@@ -144,6 +169,7 @@ def schedule_deletion_job(
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
+    expires_at_key: str | None = None,
     reconciling_uids: set[str] | None = None,
 ) -> bool:
     """
@@ -173,6 +199,8 @@ def schedule_deletion_job(
             "timezone_str": timezone_str,
             "dry_run": dry_run,
         }
+        if expires_at_key is not None:
+            job_kwargs["expires_at_key"] = expires_at_key
         if reconciling_uids is not None:
             job_kwargs["reconciling_uids"] = reconciling_uids
 

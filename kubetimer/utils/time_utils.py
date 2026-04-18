@@ -49,8 +49,8 @@ def parse_ttl_duration(ttl_value: str) -> timedelta:
     except ValueError as e:
         raise ValueError(f"Invalid TTL format: {e}")
 
-    if number < 0:
-        raise ValueError("Negative TTL values are not allowed.")
+    if number <= 0:
+        raise ValueError("TTL value must be a positive number.")
 
     unit = ttl_value[-1]
     if unit == "s":
