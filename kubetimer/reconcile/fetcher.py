@@ -74,6 +74,42 @@ async def async_delete_namespaced_deployment(namespace: str, name: str):
     await asyncio.to_thread(delete_namespaced_deployment, namespace, name)
 
 
+def patch_deployment_annotations(
+    namespace: str, name: str, annotations: dict
+) -> bool:
+    """PATCH a Deployment's annotations via strategic merge patch.
+
+    Returns True on success, False on API error (logged).
+    """
+    apps_v1 = apps_v1_client()
+    body = {"metadata": {"annotations": annotations}}
+    try:
+        apps_v1.patch_namespaced_deployment(
+            name=name,
+            namespace=namespace,
+            body=body,
+            _request_timeout=_TIMEOUT,
+        )
+        return True
+    except ApiException as e:
+        logger.error(
+            "error_patching_deployment_annotations",
+            namespace=namespace,
+            name=name,
+            error=str(e),
+        )
+        return False
+
+
+async def async_patch_deployment_annotations(
+    namespace: str, name: str, annotations: dict
+) -> bool:
+    """Async wrapper for patch_deployment_annotations."""
+    return await asyncio.to_thread(
+        patch_deployment_annotations, namespace, name, annotations
+    )
+
+
 def list_deployments_all_namespaces_paginated(
     page_size: int | None = None,
     **kwargs,

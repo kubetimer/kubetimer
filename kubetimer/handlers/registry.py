@@ -15,6 +15,7 @@ def configure_memo(memo: kopf.Memo, settings: Settings) -> None:
         settings: Parsed settings from environment variables
     """
     memo.annotation_key = settings.annotation_key
+    memo.expires_at_key = settings.annotation_key.rsplit("/", 1)[0] + "/expires-at"
     memo.dry_run = settings.dry_run
     memo.timezone = settings.timezone
     memo.namespace_include = frozenset(settings.get_namespace_include_list())
