@@ -46,8 +46,8 @@ KubeTimer is **event-driven, not poll-based**. It reacts instantly to changes in
 
 ### The flow
 
-1. **Annotate** a Deployment with an ISO 8601 expiry datetime (e.g. `kubetimer.io/ttl: "2026-12-31T23:59:59Z"`).
-2. **Kopf watches** detect the annotation and schedule an [APScheduler](https://apscheduler.readthedocs.io/) `DateTrigger` job to fire at the exact expiry time.
+1. **Annotate** a Deployment with a duration string (e.g. `kubetimer.io/ttl: "30m"`, `"2h"`, `"7d"`).
+2. **Kopf watches** detect the annotation, compute the expiry time (`now + duration`), store it as a `kubetimer.io/expires-at` annotation on the Deployment, and schedule an [APScheduler](https://apscheduler.readthedocs.io/) `DateTrigger` job to fire at that time.
 3. **When the time comes**, the job re-reads the Deployment from the API, verifies the UID still matches (guards against recreated resources) and the TTL is still expired, then deletes it.
 
  **On startup**, KubeTimer reconciles by listing all annotated Deployments: expired ones are bulk-deleted immediately; future ones get scheduled.
@@ -64,7 +64,7 @@ KubeTimer is **event-driven, not poll-based**. It reacts instantly to changes in
 
 ### Annotate a Deployment
 
-Add the TTL annotation with an **ISO 8601 datetime** indicating when the Deployment should be deleted:
+Add the TTL annotation with a **duration string** indicating how long the Deployment should live after creation:
 
 ```yaml
 apiVersion: apps/v1
@@ -73,7 +73,7 @@ metadata:
   name: my-preview-app
   namespace: preview
   annotations:
-    kubetimer.io/ttl: "2026-03-01T18:00:00Z"  # To be deleted on March 1st, 2026 at 6 PM UTC
+    kubetimer.io/ttl: "2h"  # Delete 2 hours after creation
 spec:
   replicas: 1
   selector:
@@ -81,7 +81,9 @@ spec:
       ...
 ```
 
-When `2026-03-01T18:00:00Z` arrives, KubeTimer will automatically delete this Deployment.
+Supported units: `s` (seconds), `m` (minutes), `h` (hours), `d` (days). Examples: `30m`, `2h`, `7d`.
+
+The operator will automatically compute the expiry time and store it in a `kubetimer.io/expires-at` annotation (ISO 8601 UTC). When that time arrives, KubeTimer deletes the Deployment.
 
 ### Deploy to your cluster
 
