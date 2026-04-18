@@ -16,7 +16,8 @@ def _dep(name: str = "test-dep", namespace: str = "default") -> TtlDeployment:
         name=name,
         namespace=namespace,
         uid=f"uid-{name}",
-        ttl_value=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ttl_value="1h",
+        creation_timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc).isoformat(),
     )
 
 
