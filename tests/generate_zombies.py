@@ -7,7 +7,7 @@ Usage:
     python tests/generate_zombies.py --duration 10 --rate 20 --past-ratio 0.8
 
 The script continuously creates zero-replica "zombie" Deployments
-annotated with kubetimer.io/ttl set to random datetimes.
+annotated with kubetimer.io/ttl set to random duration strings.
 
   --past-ratio  controls the mix of already-expired vs future TTLs.
                 0.5 (default) = 50 % expired, 50 % 1–120 min in the future.
@@ -21,9 +21,6 @@ import random
 import string
 import sys
 import time
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
-
 from kubernetes import client, config
 
 # ── Constants ────────────────────────────────────────────────────────
@@ -34,7 +31,6 @@ LABEL_VALUE = "kubetimer-zombie"
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
-tz = ZoneInfo("America/Sao_Paulo")
 
 
 def _random_suffix(length: int = 6) -> str:
@@ -42,23 +38,20 @@ def _random_suffix(length: int = 6) -> str:
 
 
 def _random_ttl(past_ratio: float) -> str:
-    """Return a random ISO 8601 TTL string in America/Sao_Paulo.
+    """Return a random duration TTL string.
 
-    With probability `past_ratio` the TTL is in the past.
-    Otherwise it's in the future.
+    With probability `past_ratio` the TTL is very short (1s–5s, likely
+    already expired by the time the operator processes it).
+    Otherwise it's longer (60s–90s in the future).
     """
-    now = datetime.now(tz)
-
     randomnumber = random.random()
 
     if randomnumber < past_ratio:
-        delta = timedelta(seconds=random.randint(1, 300))
-        dt = now - delta
+        seconds = random.randint(1, 5)
     else:
-        delta = timedelta(seconds=random.randint(60, 90))
-        dt = now + delta
+        seconds = random.randint(60, 90)
 
-    return dt.isoformat()
+    return f"{seconds}s"
 
 
 def _build_deployment(name: str, namespace: str, ttl: str) -> dict:
@@ -157,9 +150,9 @@ def run(
                 api.create_namespaced_deployment(namespace=namespace, body=body)
                 created += 1
 
-                # Track past vs future
-                ttl_dt = datetime.fromisoformat(ttl).replace(tzinfo=tz)
-                if ttl_dt <= datetime.now(tz):
+                # Track past vs future based on duration threshold
+                ttl_seconds = int(ttl[:-1])
+                if ttl_seconds <= 5:
                     past_count += 1
                 else:
                     future_count += 1

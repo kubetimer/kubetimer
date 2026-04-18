@@ -17,7 +17,7 @@ def create_zombies():
         "metadata": {
             "labels": {"app": "kubetimer-zombie"},
             "name": "zombie-0",
-            "annotations": {"kubetimer.io/ttl": "2025-01-01T00:00:00Z"},
+            "annotations": {"kubetimer.io/ttl": "1s"},
         },
         "spec": {
             "replicas": 0,  # 0 Replicas so we don't kill the CPU with Nginx pods
