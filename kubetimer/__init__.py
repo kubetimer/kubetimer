@@ -6,7 +6,7 @@ TTL (Time-To-Live) annotations. Resources with expired TTL are deleted
 from the cluster.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "Ryan Carvalho"
 
 import asyncio

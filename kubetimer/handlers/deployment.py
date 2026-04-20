@@ -4,7 +4,7 @@ Thin adapter layer: unpacks Kopf arguments, validates, and delegates
 to scheduler.jobs for scheduling/cancelling APScheduler jobs.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, Optional
 
 import kopf
@@ -15,7 +15,7 @@ from kubetimer.reconcile.fetcher import (
 from kubetimer.scheduler.jobs import cancel_deletion_job, schedule_deletion_job
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.namespace import should_scan_namespace
-from kubetimer.utils.time_utils import parse_ttl_duration
+from kubetimer.utils.time_utils import get_timezone, parse_ttl_duration
 
 logger = get_logger(__name__)
 
@@ -63,7 +63,8 @@ async def on_deployment_created_with_ttl(
         )
         return
 
-    expires_at = datetime.now(timezone.utc) + duration
+    tmz = get_timezone(memo.timezone)
+    expires_at = datetime.now(tmz) + duration
 
     await async_patch_deployment_annotations(
         namespace, name, {memo.expires_at_key: expires_at.isoformat()}
@@ -146,7 +147,8 @@ async def on_ttl_annotation_changed(
         )
         return
 
-    expires_at = datetime.now(timezone.utc) + duration
+    tmz = get_timezone(memo.timezone)
+    expires_at = datetime.now(tmz) + duration
 
     await async_patch_deployment_annotations(
         namespace, name, {memo.expires_at_key: expires_at.isoformat()}
