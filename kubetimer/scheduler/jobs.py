@@ -10,7 +10,11 @@ from kubetimer.reconcile.fetcher import (
     get_namespaced_deployment,
 )
 from kubetimer.utils.logs import get_logger
-from kubetimer.utils.time_utils import is_ttl_expired, parse_expires_at, parse_ttl_duration
+from kubetimer.utils.time_utils import (
+    is_ttl_expired,
+    parse_expires_at,
+    parse_ttl_duration,
+)
 
 logger = get_logger(__name__)
 

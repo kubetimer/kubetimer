@@ -11,7 +11,10 @@ from kubetimer.handlers.deployment import (
 
 
 class TestOnDeploymentCreated:
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_future_ttl_schedules_job(self, mock_schedule, mock_patch, memo):
         await on_deployment_created_with_ttl(
@@ -28,7 +31,10 @@ class TestOnDeploymentCreated:
         annotations = patch_args[0][2]
         assert "kubetimer.io/expires-at" in annotations
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_excluded_namespace_skips(self, mock_schedule, mock_patch, memo):
         await on_deployment_created_with_ttl(
@@ -41,7 +47,10 @@ class TestOnDeploymentCreated:
         mock_schedule.assert_not_called()
         mock_patch.assert_not_awaited()
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_missing_annotation_skips(self, mock_schedule, mock_patch, memo):
         await on_deployment_created_with_ttl(
@@ -54,7 +63,10 @@ class TestOnDeploymentCreated:
         mock_schedule.assert_not_called()
         mock_patch.assert_not_awaited()
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_skips_when_uid_in_reconciling_set(
         self, mock_schedule, mock_patch, memo
@@ -73,7 +85,10 @@ class TestOnDeploymentCreated:
         mock_schedule.assert_not_called()
         mock_patch.assert_not_awaited()
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_processes_when_uid_not_in_reconciling_set(
         self, mock_schedule, mock_patch, memo
@@ -92,7 +107,10 @@ class TestOnDeploymentCreated:
         mock_schedule.assert_called_once()
         mock_patch.assert_awaited_once()
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_invalid_ttl_skips(self, mock_schedule, mock_patch, memo):
         await on_deployment_created_with_ttl(
@@ -105,7 +123,10 @@ class TestOnDeploymentCreated:
         mock_schedule.assert_not_called()
         mock_patch.assert_not_awaited()
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_expires_at_is_in_the_future(self, mock_schedule, mock_patch, memo):
         """The expires-at datetime written should be approximately now + duration."""
@@ -127,7 +148,10 @@ class TestOnDeploymentCreated:
 
 
 class TestOnTtlAnnotationChanged:
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_new_ttl_reschedules(self, mock_schedule, mock_patch, memo):
         await on_ttl_annotation_changed(
@@ -143,7 +167,10 @@ class TestOnTtlAnnotationChanged:
         annotations = mock_patch.call_args[0][2]
         assert "kubetimer.io/expires-at" in annotations
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     async def test_annotation_removed_cancels_and_clears_expires_at(
         self, mock_cancel, mock_patch, memo
@@ -161,7 +188,10 @@ class TestOnTtlAnnotationChanged:
         annotations = mock_patch.call_args[0][2]
         assert annotations["kubetimer.io/expires-at"] is None
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     async def test_excluded_namespace_cancels(self, mock_cancel, mock_patch, memo):
         await on_ttl_annotation_changed(
@@ -174,7 +204,10 @@ class TestOnTtlAnnotationChanged:
         )
         mock_cancel.assert_called_once()
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     async def test_invalid_ttl_cancels_and_clears_expires_at(
         self, mock_cancel, mock_patch, memo
@@ -192,7 +225,10 @@ class TestOnTtlAnnotationChanged:
         annotations = mock_patch.call_args[0][2]
         assert annotations["kubetimer.io/expires-at"] is None
 
-    @patch("kubetimer.handlers.deployment.async_patch_deployment_annotations", new_callable=AsyncMock)
+    @patch(
+        "kubetimer.handlers.deployment.async_patch_deployment_annotations",
+        new_callable=AsyncMock,
+    )
     @patch("kubetimer.handlers.deployment.cancel_deletion_job")
     @patch("kubetimer.handlers.deployment.schedule_deletion_job")
     async def test_skips_when_uid_in_reconciling_set(

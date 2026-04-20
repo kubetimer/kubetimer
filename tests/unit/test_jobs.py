@@ -127,7 +127,9 @@ def _mock_deployment(uid="uid-1", annotations=None, creation_timestamp=None):
     dep.metadata = SimpleNamespace()
     dep.metadata.uid = uid
     dep.metadata.annotations = annotations
-    dep.metadata.creation_timestamp = creation_timestamp or datetime.now(timezone.utc).isoformat()
+    dep.metadata.creation_timestamp = (
+        creation_timestamp or datetime.now(timezone.utc).isoformat()
+    )
     return dep
 
 
@@ -167,7 +169,9 @@ class TestDeleteDeploymentJob:
     )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_deletes_via_fallback_when_no_expires_at(self, mock_get, mock_delete):
-        """Fallback path: no expires-at, compute from creation_timestamp + ttl duration."""
+        """Fallback path: no expires-at,
+        compute from creation_timestamp + ttl duration.
+        """
         mock_get.return_value = _mock_deployment(
             uid="uid-1",
             annotations={"kubetimer.io/ttl": "1h"},

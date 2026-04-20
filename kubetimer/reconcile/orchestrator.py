@@ -87,6 +87,12 @@ def _triage_deployments(
         expires_at_dt = None
 
         if dep.expires_at:
+            logger.info(
+                "reconcile_deployment_with_expires_at",
+                namespace=dep.namespace,
+                name=dep.name,
+                expires_at=dep.expires_at,
+            )
             try:
                 expires_at_dt = parse_expires_at(dep.expires_at)
             except ValueError:

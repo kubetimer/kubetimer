@@ -9,4 +9,4 @@ class TtlDeployment:
     uid: str
     ttl_value: str
     creation_timestamp: datetime | str
-    expires_at: datetime | None = None
+    expires_at: str | None = None

@@ -64,6 +64,7 @@ def parse_ttl_duration(ttl_value: str) -> timedelta:
     else:
         raise ValueError(f"Unsupported TTL unit: {unit}")
 
+
 def parse_expires_at(expires_at_str: str) -> datetime:
     """Parse an ISO 8601 expires-at annotation value into a timezone-aware datetime.
 

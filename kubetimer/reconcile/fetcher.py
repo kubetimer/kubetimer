@@ -74,9 +74,7 @@ async def async_delete_namespaced_deployment(namespace: str, name: str):
     await asyncio.to_thread(delete_namespaced_deployment, namespace, name)
 
 
-def patch_deployment_annotations(
-    namespace: str, name: str, annotations: dict
-) -> bool:
+def patch_deployment_annotations(namespace: str, name: str, annotations: dict) -> bool:
     """PATCH a Deployment's annotations via strategic merge patch.
 
     Returns True on success, False on API error (logged).
