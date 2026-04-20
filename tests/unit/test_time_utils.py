@@ -112,12 +112,3 @@ class TestIsTtlExpired:
         """Expiry check should work across timezone boundaries."""
         past = datetime.now(timezone.utc) - timedelta(hours=1)
         assert is_ttl_expired(past, "America/New_York")
-
-    def test_future_datetime_is_not_expired(self):
-        future = datetime.now(timezone.utc) + timedelta(hours=1)
-        assert not is_ttl_expired(future)
-
-    def test_non_utc_timezone(self):
-        """Expiry check should work across timezone boundaries."""
-        past = datetime.now(timezone.utc) - timedelta(hours=1)
-        assert is_ttl_expired(past, "America/New_York")

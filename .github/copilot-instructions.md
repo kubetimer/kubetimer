@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A **Kopf-based Kubernetes operator** that deletes Deployments whose duration-based TTL annotation (`kubetimer.io/ttl`, e.g. `30m`, `2h`, `7d`) has expired. On annotation detection, the operator computes the expiry time (`now + duration`), stores it as a `kubetimer.io/expires-at` annotation (ISO 8601 UTC), and schedules an APScheduler `DateTrigger` job. Deletions are **event-driven** — not periodic polling. Configuration comes from `KUBETIMER_*` environment variables (Pydantic Settings). Python 3.14, managed with **uv** and **hatchling** build backend.
+A **Kopf-based Kubernetes operator** that deletes Deployments whose duration-based TTL annotation (`kubetimer.io/ttl`, e.g. `30m`, `2h`, `7d`) has expired. On annotation detection, the operator computes the expiry time (`now + duration`), stores it as a `kubetimer.io/expires-at` annotation (ISO 8601), and schedules an APScheduler `DateTrigger` job. Deletions are **event-driven** — not periodic polling. Configuration comes from `KUBETIMER_*` environment variables (Pydantic Settings). Python 3.14, managed with **uv** and **hatchling** build backend.
 
 ## Architecture & Data Flow
 

@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
@@ -105,6 +105,8 @@ async def delete_deployment_job(
                     if hasattr(deployment.metadata.creation_timestamp, "isoformat")
                     else str(deployment.metadata.creation_timestamp)
                 )
+                if creation.tzinfo is None:
+                    creation = creation.replace(tzinfo=timezone.utc)
                 expires_at_dt = creation + duration
             except (ValueError, TypeError) as e:
                 logger.error(
@@ -165,7 +167,7 @@ def schedule_deletion_job(
     namespace: str,
     name: str,
     uid: str,
-    ttl_datetime: datetime,
+    expires_at: datetime,
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
@@ -175,7 +177,7 @@ def schedule_deletion_job(
     """
     Schedule a deletion job at TTL expiry time.
 
-    Uses DateTrigger for exact, one-shot execution.  If ttl_datetime is
+    Uses DateTrigger for exact, one-shot execution.  If expires_at is
     in the past, APScheduler fires the job immediately — this is the
     correct behavior for both startup reconciliation and deployments
     created with an already-expired TTL.
@@ -188,7 +190,7 @@ def schedule_deletion_job(
         True if job was scheduled, False on error.
     """
     job_id = _make_job_id(namespace, name, uid)
-    now = datetime.now(ttl_datetime.tzinfo)
+    now = datetime.now(expires_at.tzinfo)
 
     try:
         job_kwargs: dict = {
@@ -206,7 +208,7 @@ def schedule_deletion_job(
 
         scheduler.add_job(
             delete_deployment_job,
-            trigger=DateTrigger(run_date=ttl_datetime),
+            trigger=DateTrigger(run_date=expires_at),
             id=job_id,
             name=f"Delete {namespace}/{name}",
             replace_existing=True,
@@ -218,8 +220,8 @@ def schedule_deletion_job(
             job_id=job_id,
             namespace=namespace,
             name=name,
-            run_date=ttl_datetime.isoformat(),
-            seconds_until_execution=(ttl_datetime - now).total_seconds(),
+            run_date=expires_at.isoformat(),
+            seconds_until_execution=(expires_at - now).total_seconds(),
         )
         return True
 

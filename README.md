@@ -83,11 +83,11 @@ spec:
 
 Supported units: `s` (seconds), `m` (minutes), `h` (hours), `d` (days). Examples: `30m`, `2h`, `7d`.
 
-The operator will automatically compute the expiry time and store it in a `kubetimer.io/expires-at` annotation (ISO 8601 UTC). When that time arrives, KubeTimer deletes the Deployment.
+The operator will automatically compute the expiry time and store it in a `kubetimer.io/expires-at` annotation as an ISO 8601 timestamp using the configured operator timezone. When that time arrives, Kubetimer deletes the Deployment.
 
 ### Deploy to your cluster
 
-The quickest way to get KubeTimer running:
+The quickest way to get Kubetimer running:
 
 ```bash
 # Clone the repository

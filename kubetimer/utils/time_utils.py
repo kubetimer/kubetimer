@@ -32,11 +32,11 @@ def parse_ttl_duration(ttl_value: str) -> timedelta:
     Raises:
         ValueError: If the value is empty, negative, or has an invalid unit.
     """
+    ttl_value = ttl_value.strip()
     if not ttl_value:
         raise ValueError("TTL value is empty.")
     if "-" in ttl_value:
         raise ValueError("Negative TTL values are not allowed.")
-    ttl_value = ttl_value.strip()
 
     units_map = {"s", "m", "h", "d"}
     if ttl_value[-1] not in units_map:
@@ -59,9 +59,10 @@ def parse_ttl_duration(ttl_value: str) -> timedelta:
         return timedelta(minutes=number)
     elif unit == "h":
         return timedelta(hours=number)
-    else:  # "d"
+    elif unit == "d":
         return timedelta(days=number)
-
+    else:
+        raise ValueError(f"Unsupported TTL unit: {unit}")
 
 def parse_expires_at(expires_at_str: str) -> datetime:
     """Parse an ISO 8601 expires-at annotation value into a timezone-aware datetime.

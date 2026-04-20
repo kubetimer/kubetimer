@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -7,5 +8,5 @@ class TtlDeployment:
     namespace: str
     uid: str
     ttl_value: str
-    creation_timestamp: str
-    expires_at: str | None = None
+    creation_timestamp: datetime | str
+    expires_at: datetime | None = None
