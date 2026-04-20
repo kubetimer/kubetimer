@@ -1,7 +1,7 @@
 import time
 from kubernetes import client, config
 
-DEPLOYMENTS_COUNT = 2000
+DEPLOYMENTS_COUNT = 1
 BATCH_SIZE = 200  # Create in batches to be nice to Minikube
 
 
@@ -17,7 +17,7 @@ def create_zombies():
         "metadata": {
             "labels": {"app": "kubetimer-zombie"},
             "name": "zombie-0",
-            "annotations": {"kubetimer.io/ttl": "2025-01-01T00:00:00Z"},
+            "annotations": {"kubetimer.io/ttl": "1h"},
         },
         "spec": {
             "replicas": 0,  # 0 Replicas so we don't kill the CPU with Nginx pods

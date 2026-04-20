@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: nginx-expired
   annotations:
-    kubetimer.io/ttl: "2024-01-07T12:00:00Z"
+    kubetimer.io/ttl: "30m"
 spec:
   replicas: 1
   selector:

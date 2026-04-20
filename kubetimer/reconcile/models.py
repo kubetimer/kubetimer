@@ -7,4 +7,6 @@ class TtlDeployment:
     name: str
     namespace: str
     uid: str
-    ttl_value: datetime
+    ttl_value: str
+    creation_timestamp: datetime | str
+    expires_at: str | None = None

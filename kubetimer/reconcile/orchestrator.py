@@ -5,6 +5,7 @@ future deletions, and bulk-deletes already-expired ones.
 """
 
 import asyncio
+from datetime import datetime, timezone
 from time import time
 import kopf
 
@@ -14,13 +15,18 @@ from kubetimer.reconcile.models import TtlDeployment
 from kubetimer.scheduler.jobs import schedule_deletion_job
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.namespace import should_scan_namespace
-from kubetimer.utils.time_utils import is_ttl_expired, parse_ttl
+from kubetimer.utils.time_utils import (
+    is_ttl_expired,
+    parse_expires_at,
+    parse_ttl_duration,
+)
 
 logger = get_logger(__name__)
 
 
 def _fetch_ttl_deployments(
     annotation_key: str,
+    expires_at_key: str,
     include_ns: list[str] | frozenset[str],
     exclude_ns: list[str] | frozenset[str],
 ) -> list[TtlDeployment]:
@@ -39,18 +45,6 @@ def _fetch_ttl_deployments(
             if not ttl_value:
                 continue
 
-            try:
-                ttl_datetime = parse_ttl(ttl_value)
-            except ValueError as e:
-                logger.error(
-                    "reconcile_invalid_ttl",
-                    namespace=dep.metadata.namespace or "<unknown>",
-                    name=dep.metadata.name or "<unknown>",
-                    ttl=ttl_value,
-                    error=str(e),
-                )
-                continue
-
             ns = dep.metadata.namespace
             if not should_scan_namespace(ns, include_ns, exclude_ns):
                 continue
@@ -60,7 +54,9 @@ def _fetch_ttl_deployments(
                     name=dep.metadata.name,
                     namespace=ns,
                     uid=dep.metadata.uid,
-                    ttl_value=ttl_datetime,
+                    ttl_value=ttl_value,
+                    creation_timestamp=dep.metadata.creation_timestamp,
+                    expires_at=annotations.get(expires_at_key),
                 )
             )
     except Exception as e:
@@ -75,6 +71,7 @@ def _triage_deployments(
     annotation_key: str,
     timezone_str: str,
     dry_run: bool,
+    expires_at_key: str | None = None,
     reconciling_uids: set[str] | None = None,
 ) -> tuple[list[TtlDeployment], int, int]:
     """Classify deployments into expired (immediate delete) vs future (schedule).
@@ -87,7 +84,48 @@ def _triage_deployments(
     error_count = 0
 
     for dep in deployments:
-        if is_ttl_expired(dep.ttl_value, timezone_str):
+        expires_at_dt = None
+
+        if dep.expires_at:
+            logger.info(
+                "reconcile_deployment_with_expires_at",
+                namespace=dep.namespace,
+                name=dep.name,
+                expires_at=dep.expires_at,
+            )
+            try:
+                expires_at_dt = parse_expires_at(dep.expires_at)
+            except ValueError:
+                logger.warning(
+                    "reconcile_invalid_expires_at",
+                    namespace=dep.namespace,
+                    name=dep.name,
+                    expires_at=dep.expires_at,
+                )
+
+        if expires_at_dt is None:
+            try:
+                duration = parse_ttl_duration(dep.ttl_value)
+                creation = datetime.fromisoformat(
+                    dep.creation_timestamp.isoformat()
+                    if hasattr(dep.creation_timestamp, "isoformat")
+                    else str(dep.creation_timestamp)
+                )
+                if creation.tzinfo is None:
+                    creation = creation.replace(tzinfo=timezone.utc)
+                expires_at_dt = creation + duration
+            except (ValueError, TypeError) as e:
+                logger.error(
+                    "reconcile_invalid_ttl",
+                    namespace=dep.namespace,
+                    name=dep.name,
+                    ttl=dep.ttl_value,
+                    error=str(e),
+                )
+                error_count += 1
+                continue
+
+        if is_ttl_expired(expires_at_dt, timezone_str):
             expired.append(dep)
         else:
             if schedule_deletion_job(
@@ -95,10 +133,11 @@ def _triage_deployments(
                 dep.namespace,
                 dep.name,
                 dep.uid,
-                dep.ttl_value,
+                expires_at_dt,
                 annotation_key,
                 timezone_str,
                 dry_run,
+                expires_at_key=expires_at_key,
                 reconciling_uids=reconciling_uids,
             ):
                 scheduled_count += 1
@@ -126,12 +165,14 @@ async def reconcile_existing_deployments(
 
     scheduler = memo.scheduler
     annotation_key = memo.annotation_key
+    expires_at_key = memo.expires_at_key
     timezone_str = memo.timezone
     dry_run = memo.dry_run
 
     deployments = await asyncio.to_thread(
         _fetch_ttl_deployments,
         annotation_key,
+        expires_at_key,
         memo.namespace_include,
         memo.namespace_exclude,
     )
@@ -153,6 +194,7 @@ async def reconcile_existing_deployments(
         annotation_key,
         timezone_str,
         dry_run,
+        expires_at_key=expires_at_key,
         reconciling_uids=reconciling_uids,
     )
 

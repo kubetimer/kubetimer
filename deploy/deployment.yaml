@@ -22,7 +22,7 @@ spec:
       serviceAccountName: kubetimer-operator
       containers:
         - name: operator
-          image: ryanjorgeac/kubetimer:v0.2.2-log
+          image: ryanjorgeac/kubetimer:v0.3.0
           imagePullPolicy: Always
           env:
             - name: KUBETIMER_LOG_LEVEL

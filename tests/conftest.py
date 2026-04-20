@@ -61,6 +61,7 @@ def memo():
     """
     m = SimpleNamespace()
     m.annotation_key = "kubetimer.io/ttl"
+    m.expires_at_key = "kubetimer.io/expires-at"
     m.dry_run = False
     m.timezone = "UTC"
     m.namespace_include = frozenset()

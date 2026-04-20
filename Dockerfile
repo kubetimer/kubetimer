@@ -1,5 +1,9 @@
 FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
 
+LABEL description="Docker image for Kubetimer version handling less verbose time unit." \
+      version="0.3.0" \
+      maintainer="Ryan Carvalho <ryanjorgeac@gmail.com>"
+
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 

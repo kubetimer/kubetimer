@@ -2,11 +2,12 @@
 
 Covers:
   - _make_job_id: format check
-  - schedule_deletion_job: happy path, exception → False
+  - schedule_deletion_job: happy path, exception → False, expires_at_key forwarding
   - cancel_deletion_job: happy path, JobLookupError → False, generic error → False
   - delete_deployment_job: all verification branches (already deleted,
     uid mismatch, annotation removed, TTL no longer expired, invalid TTL,
-    dry_run, actual delete, unexpected exception)
+    dry_run, actual delete, unexpected exception, expires-at preferred path,
+    fallback path via ttl + creation_timestamp)
 """
 
 from datetime import datetime, timezone, timedelta
@@ -26,6 +27,11 @@ from kubetimer.scheduler.jobs import (
 
 FUTURE = datetime.now(timezone.utc) + timedelta(hours=1)
 PAST = datetime.now(timezone.utc) - timedelta(hours=1)
+
+PAST_EXPIRES_AT = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+FUTURE_EXPIRES_AT = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+CREATION_2H_AGO = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
 
 
 class TestMakeJobId:
@@ -116,11 +122,14 @@ class TestCancelDeletionJob:
         assert result is False
 
 
-def _mock_deployment(uid="uid-1", annotations=None):
+def _mock_deployment(uid="uid-1", annotations=None, creation_timestamp=None):
     dep = SimpleNamespace()
     dep.metadata = SimpleNamespace()
     dep.metadata.uid = uid
     dep.metadata.annotations = annotations
+    dep.metadata.creation_timestamp = (
+        creation_timestamp or datetime.now(timezone.utc).isoformat()
+    )
     return dep
 
 
@@ -131,11 +140,14 @@ class TestDeleteDeploymentJob:
         new_callable=AsyncMock,
     )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
-    async def test_deletes_when_expired(self, mock_get, mock_delete):
-        past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    async def test_deletes_when_expires_at_is_past(self, mock_get, mock_delete):
+        """Primary path: expires-at annotation present and expired."""
         mock_get.return_value = _mock_deployment(
             uid="uid-1",
-            annotations={"kubetimer.io/ttl": past_ttl},
+            annotations={
+                "kubetimer.io/ttl": "1h",
+                "kubetimer.io/expires-at": PAST_EXPIRES_AT,
+            },
         )
 
         await delete_deployment_job(
@@ -145,6 +157,35 @@ class TestDeleteDeploymentJob:
             "kubetimer.io/ttl",
             "UTC",
             dry_run=False,
+            expires_at_key="kubetimer.io/expires-at",
+        )
+
+        mock_delete.assert_awaited_once_with("default", "web")
+
+    @pytest.mark.asyncio
+    @patch(
+        "kubetimer.scheduler.jobs.async_delete_namespaced_deployment",
+        new_callable=AsyncMock,
+    )
+    @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
+    async def test_deletes_via_fallback_when_no_expires_at(self, mock_get, mock_delete):
+        """Fallback path: no expires-at,
+        compute from creation_timestamp + ttl duration.
+        """
+        mock_get.return_value = _mock_deployment(
+            uid="uid-1",
+            annotations={"kubetimer.io/ttl": "1h"},
+            creation_timestamp=CREATION_2H_AGO,
+        )
+
+        await delete_deployment_job(
+            "default",
+            "web",
+            "uid-1",
+            "kubetimer.io/ttl",
+            "UTC",
+            dry_run=False,
+            expires_at_key="kubetimer.io/expires-at",
         )
 
         mock_delete.assert_awaited_once_with("default", "web")
@@ -156,10 +197,12 @@ class TestDeleteDeploymentJob:
     )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_dry_run_skips_delete(self, mock_get, mock_delete):
-        past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         mock_get.return_value = _mock_deployment(
             uid="uid-1",
-            annotations={"kubetimer.io/ttl": past_ttl},
+            annotations={
+                "kubetimer.io/ttl": "1h",
+                "kubetimer.io/expires-at": PAST_EXPIRES_AT,
+            },
         )
 
         await delete_deployment_job(
@@ -169,6 +212,7 @@ class TestDeleteDeploymentJob:
             "kubetimer.io/ttl",
             "UTC",
             dry_run=True,
+            expires_at_key="kubetimer.io/expires-at",
         )
 
         mock_delete.assert_not_awaited()
@@ -178,7 +222,6 @@ class TestDeleteDeploymentJob:
     async def test_skips_when_already_deleted(self, mock_get):
         mock_get.return_value = None
 
-        # Should not raise
         await delete_deployment_job(
             "default",
             "web",
@@ -215,6 +258,7 @@ class TestDeleteDeploymentJob:
     )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_skips_when_annotation_removed(self, mock_get, mock_delete):
+        """No TTL and no expires-at → skip."""
         mock_get.return_value = _mock_deployment(uid="uid-1", annotations={})
 
         await delete_deployment_job(
@@ -224,6 +268,7 @@ class TestDeleteDeploymentJob:
             "kubetimer.io/ttl",
             "UTC",
             False,
+            expires_at_key="kubetimer.io/expires-at",
         )
 
         mock_delete.assert_not_awaited()
@@ -234,11 +279,13 @@ class TestDeleteDeploymentJob:
         new_callable=AsyncMock,
     )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
-    async def test_skips_when_ttl_no_longer_expired(self, mock_get, mock_delete):
-        future_ttl = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    async def test_skips_when_expires_at_not_expired(self, mock_get, mock_delete):
         mock_get.return_value = _mock_deployment(
             uid="uid-1",
-            annotations={"kubetimer.io/ttl": future_ttl},
+            annotations={
+                "kubetimer.io/ttl": "2h",
+                "kubetimer.io/expires-at": FUTURE_EXPIRES_AT,
+            },
         )
 
         await delete_deployment_job(
@@ -248,6 +295,7 @@ class TestDeleteDeploymentJob:
             "kubetimer.io/ttl",
             "UTC",
             False,
+            expires_at_key="kubetimer.io/expires-at",
         )
 
         mock_delete.assert_not_awaited()
@@ -258,7 +306,7 @@ class TestDeleteDeploymentJob:
         new_callable=AsyncMock,
     )
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
-    async def test_skips_on_invalid_ttl(self, mock_get, mock_delete):
+    async def test_skips_on_invalid_ttl_in_fallback(self, mock_get, mock_delete):
         mock_get.return_value = _mock_deployment(
             uid="uid-1",
             annotations={"kubetimer.io/ttl": "garbage"},
@@ -300,10 +348,12 @@ class TestDeleteDeploymentJob:
         self, mock_get, mock_delete
     ):
         """UID should be removed from reconciling_uids when job completes."""
-        past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         mock_get.return_value = _mock_deployment(
             uid="uid-1",
-            annotations={"kubetimer.io/ttl": past_ttl},
+            annotations={
+                "kubetimer.io/ttl": "1h",
+                "kubetimer.io/expires-at": PAST_EXPIRES_AT,
+            },
         )
         uids = {"uid-1", "uid-other"}
 
@@ -314,6 +364,7 @@ class TestDeleteDeploymentJob:
             "kubetimer.io/ttl",
             "UTC",
             dry_run=False,
+            expires_at_key="kubetimer.io/expires-at",
             reconciling_uids=uids,
         )
 
@@ -366,10 +417,12 @@ class TestDeleteDeploymentJob:
     @patch("kubetimer.scheduler.jobs.get_namespaced_deployment")
     async def test_no_error_when_reconciling_uids_is_none(self, mock_get, mock_delete):
         """No error when reconciling_uids is not provided (normal event path)."""
-        past_ttl = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         mock_get.return_value = _mock_deployment(
             uid="uid-1",
-            annotations={"kubetimer.io/ttl": past_ttl},
+            annotations={
+                "kubetimer.io/ttl": "1h",
+                "kubetimer.io/expires-at": PAST_EXPIRES_AT,
+            },
         )
 
         # Should not raise — reconciling_uids defaults to None
@@ -380,6 +433,7 @@ class TestDeleteDeploymentJob:
             "kubetimer.io/ttl",
             "UTC",
             dry_run=False,
+            expires_at_key="kubetimer.io/expires-at",
         )
 
 
@@ -421,3 +475,38 @@ class TestScheduleDeletionJobReconcilingUids:
 
         _, call_kwargs = scheduler.add_job.call_args
         assert "reconciling_uids" not in call_kwargs["kwargs"]
+
+    def test_forwards_expires_at_key_in_kwargs(self):
+        scheduler = _create_scheduler_mock()
+
+        schedule_deletion_job(
+            scheduler,
+            "default",
+            "web",
+            "uid-1",
+            FUTURE,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
+            expires_at_key="kubetimer.io/expires-at",
+        )
+
+        _, call_kwargs = scheduler.add_job.call_args
+        assert call_kwargs["kwargs"]["expires_at_key"] == "kubetimer.io/expires-at"
+
+    def test_omits_expires_at_key_when_none(self):
+        scheduler = _create_scheduler_mock()
+
+        schedule_deletion_job(
+            scheduler,
+            "default",
+            "web",
+            "uid-1",
+            FUTURE,
+            "kubetimer.io/ttl",
+            "UTC",
+            False,
+        )
+
+        _, call_kwargs = scheduler.add_job.call_args
+        assert "expires_at_key" not in call_kwargs["kwargs"]
