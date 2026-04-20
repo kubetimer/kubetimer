@@ -40,10 +40,6 @@ def _fetch_ttl_deployments(
     deployments: list[TtlDeployment] = []
     try:
         for dep in list_deployments_all_namespaces_paginated():
-            logger.info(
-                "reconcile_listing_deployment",
-                deployment=dep,
-            )
             annotations = dep.metadata.annotations or {}
             ttl_value = annotations.get(annotation_key)
             if not ttl_value:
