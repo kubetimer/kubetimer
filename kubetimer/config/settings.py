@@ -74,6 +74,14 @@ class Settings(BaseSettings):
         default="kubetimer.io/ttl", description="Annotation key to look for TTL values"
     )
 
+    default_action: Literal["hibernate", "delete"] = Field(
+        default="hibernate",
+        description=(
+            "Default lifecycle action when a Deployment has no "
+            "`kubetimer.io/action` annotation. One of: 'hibernate', 'delete'."
+        ),
+    )
+
     namespace_include: str = Field(
         default="",
         description="Comma-separated list of namespaces "
