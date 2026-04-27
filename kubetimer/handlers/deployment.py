@@ -13,6 +13,7 @@ from kubetimer.reconcile.fetcher import (
     async_patch_deployment_annotations,
 )
 from kubetimer.scheduler.jobs import cancel_deletion_job, schedule_deletion_job
+from kubetimer.utils.actions import resolve_action
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.namespace import should_scan_namespace
 from kubetimer.utils.time_utils import get_timezone, parse_ttl_duration
@@ -52,6 +53,19 @@ async def on_deployment_created_with_ttl(
         return
 
     try:
+        action = resolve_action(annotations, memo.action_key, memo.default_action)
+    except ValueError as e:
+        logger.error(
+            "invalid_action_annotation_on_create",
+            namespace=namespace,
+            name=name,
+            action_key=memo.action_key,
+            error=str(e),
+            message="Refusing to schedule; fix the action annotation.",
+        )
+        return
+
+    try:
         duration = parse_ttl_duration(ttl_value)
     except ValueError as e:
         logger.error(
@@ -75,6 +89,7 @@ async def on_deployment_created_with_ttl(
         namespace=namespace,
         name=name,
         ttl=ttl_value,
+        action=action,
         expires_at=expires_at.isoformat(),
     )
     schedule_deletion_job(
@@ -87,6 +102,9 @@ async def on_deployment_created_with_ttl(
         memo.timezone,
         memo.dry_run,
         expires_at_key=memo.expires_at_key,
+        action_key=memo.action_key,
+        default_action=memo.default_action,
+        original_replicas_key=memo.original_replicas_key,
     )
 
 
@@ -96,6 +114,7 @@ async def on_ttl_annotation_changed(
     uid: str,
     old: Optional[str],
     new: Optional[str],
+    body: Dict,
     memo: kopf.Memo,
     **_,
 ) -> None:
@@ -147,6 +166,24 @@ async def on_ttl_annotation_changed(
         )
         return
 
+    annotations = (body.get("metadata") or {}).get("annotations") or {}
+    try:
+        action = resolve_action(annotations, memo.action_key, memo.default_action)
+    except ValueError as e:
+        logger.error(
+            "invalid_action_annotation_on_change",
+            namespace=namespace,
+            name=name,
+            action_key=memo.action_key,
+            error=str(e),
+            message="Cancelling existing job; fix the action annotation.",
+        )
+        cancel_deletion_job(memo.scheduler, namespace, name, uid)
+        await async_patch_deployment_annotations(
+            namespace, name, {memo.expires_at_key: None}
+        )
+        return
+
     tmz = get_timezone(memo.timezone)
     expires_at = datetime.now(tmz) + duration
 
@@ -160,6 +197,7 @@ async def on_ttl_annotation_changed(
         name=name,
         old_ttl=old,
         new_ttl=new,
+        action=action,
         expires_at=expires_at.isoformat(),
     )
     schedule_deletion_job(
@@ -172,6 +210,9 @@ async def on_ttl_annotation_changed(
         memo.timezone,
         memo.dry_run,
         expires_at_key=memo.expires_at_key,
+        action_key=memo.action_key,
+        default_action=memo.default_action,
+        original_replicas_key=memo.original_replicas_key,
     )
 
 

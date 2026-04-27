@@ -108,6 +108,55 @@ async def async_patch_deployment_annotations(
     )
 
 
+def hibernate_deployment(
+    namespace: str,
+    name: str,
+    original_replicas: int,
+    original_replicas_key: str,
+) -> bool:
+    """Scale a Deployment to 0 replicas and stash the original count.
+
+    Returns True on success, False on API error (logged).
+    """
+    apps_v1 = apps_v1_client()
+    body = {
+        "metadata": {"annotations": {original_replicas_key: str(original_replicas)}},
+        "spec": {"replicas": 0},
+    }
+    try:
+        apps_v1.patch_namespaced_deployment(
+            name=name,
+            namespace=namespace,
+            body=body,
+            _request_timeout=_TIMEOUT,
+        )
+        return True
+    except ApiException as e:
+        logger.error(
+            "error_hibernating_deployment",
+            namespace=namespace,
+            name=name,
+            original_replicas=original_replicas,
+            error=str(e),
+        )
+        return False
+
+
+async def async_hibernate_deployment(
+    namespace: str,
+    name: str,
+    original_replicas: int,
+    original_replicas_key: str,
+) -> bool:
+    return await asyncio.to_thread(
+        hibernate_deployment,
+        namespace,
+        name,
+        original_replicas,
+        original_replicas_key,
+    )
+
+
 def list_deployments_all_namespaces_paginated(
     page_size: int | None = None,
     **kwargs,

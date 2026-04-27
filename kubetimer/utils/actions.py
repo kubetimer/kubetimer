@@ -24,12 +24,12 @@ def resolve_action(
     if not annotations:
         return default
 
-    raw = annotations.get(action_key)
-    if raw is None:
+    raw_action = annotations.get(action_key)
+    if raw_action is None:
         return default
 
-    value = raw.strip().lower()
+    value = raw_action.strip().lower()
     if value not in VALID_ACTIONS:
-        raise ValueError(f"invalid_action: {raw!r}")
+        raise ValueError(f"invalid_action: {raw_action!r}")
 
     return value  # type: ignore[return-value]

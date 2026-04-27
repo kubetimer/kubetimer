@@ -7,7 +7,14 @@ from apscheduler.jobstores.base import JobLookupError
 
 from kubetimer.reconcile.fetcher import (
     async_delete_namespaced_deployment,
+    async_hibernate_deployment,
     get_namespaced_deployment,
+)
+from kubetimer.utils.actions import (
+    ACTION_DELETE,
+    ACTION_HIBERNATE,
+    ActionLiteral,
+    resolve_action,
 )
 from kubetimer.utils.logs import get_logger
 from kubetimer.utils.time_utils import (
@@ -36,14 +43,17 @@ async def delete_deployment_job(
     timezone_str: str,
     dry_run: bool,
     expires_at_key: str | None = None,
+    action_key: str | None = None,
+    default_action: ActionLiteral = ACTION_HIBERNATE,
+    original_replicas_key: str | None = None,
     reconciling_uids: set[str] | None = None,
 ) -> None:
     """
-    Execute the actual deletion of a Deployment (called by APScheduler).
+    Execute the TTL-expiry action for a Deployment (called by APScheduler).
 
-    Re-verifies UID + expiry before deleting — the annotation might
-    have changed, or the Deployment might have been recreated since the
-    job was scheduled.
+    Re-verifies UID + expiry + action before doing anything destructive — the
+    annotation might have changed, or the Deployment might have been recreated
+    since the job was scheduled.
     """
     job_id = _make_job_id(namespace, name, uid)
 
@@ -134,21 +144,73 @@ async def delete_deployment_job(
             )
             return
 
-        if dry_run:
-            logger.info(
-                "dry_run_deletion",
+        try:
+            action = resolve_action(annotations, action_key or "", default_action)
+        except ValueError as e:
+            logger.error(
+                "invalid_action_at_execution",
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
+                action_key=action_key,
+                error=str(e),
+                message="Refusing to act; fix the action annotation.",
+            )
+            return
+
+        if action == ACTION_DELETE:
+            if dry_run:
+                logger.info(
+                    "dry_run_deletion",
+                    job_id=job_id,
+                    namespace=namespace,
+                    name=name,
+                    expires_at=expires_at_dt.isoformat(),
+                )
+            else:
+                await async_delete_namespaced_deployment(namespace, name)
+                logger.info(
+                    "deployment_deleted_by_scheduler",
+                    job_id=job_id,
+                    namespace=namespace,
+                    name=name,
+                    expires_at=expires_at_dt.isoformat(),
+                )
+            return
+
+        replicas = deployment.spec.replicas if deployment.spec else None
+        if not replicas or replicas == 0:
+            logger.info(
+                "deployment_already_hibernated",
+                job_id=job_id,
+                namespace=namespace,
+                name=name,
+                replicas=replicas,
+            )
+            return
+
+        if dry_run:
+            logger.info(
+                "dry_run_hibernation",
+                job_id=job_id,
+                namespace=namespace,
+                name=name,
+                original_replicas=replicas,
                 expires_at=expires_at_dt.isoformat(),
             )
         else:
-            await async_delete_namespaced_deployment(namespace, name)
+            await async_hibernate_deployment(
+                namespace,
+                name,
+                replicas,
+                original_replicas_key or "",
+            )
             logger.info(
-                "deployment_deleted_by_scheduler",
+                "deployment_hibernated_by_scheduler",
                 job_id=job_id,
                 namespace=namespace,
                 name=name,
+                original_replicas=replicas,
                 expires_at=expires_at_dt.isoformat(),
             )
 
@@ -176,6 +238,9 @@ def schedule_deletion_job(
     timezone_str: str,
     dry_run: bool,
     expires_at_key: str | None = None,
+    action_key: str | None = None,
+    default_action: ActionLiteral = ACTION_HIBERNATE,
+    original_replicas_key: str | None = None,
     reconciling_uids: set[str] | None = None,
 ) -> bool:
     """
@@ -207,6 +272,11 @@ def schedule_deletion_job(
         }
         if expires_at_key is not None:
             job_kwargs["expires_at_key"] = expires_at_key
+        if action_key is not None:
+            job_kwargs["action_key"] = action_key
+        if original_replicas_key is not None:
+            job_kwargs["original_replicas_key"] = original_replicas_key
+        job_kwargs["default_action"] = default_action
         if reconciling_uids is not None:
             job_kwargs["reconciling_uids"] = reconciling_uids
 
